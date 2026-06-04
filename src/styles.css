@@ -149,28 +149,20 @@ textarea {
 .table-stage {
   grid-area: stage;
   position: relative;
-  height: 760px;
-  padding: 28px;
+  height: auto;
+  min-height: 0;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at center, rgba(34, 197, 94, 0.16), transparent 42%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.2), rgba(15, 23, 42, 0.05));
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  overflow: hidden;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  overflow: visible;
 }
 
 .table-stage::before {
-  content: "";
-  position: absolute;
-  inset: 16%;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  box-shadow: inset 0 0 0 16px rgba(6, 12, 24, 0.25);
-  background:
-    radial-gradient(circle at center, rgba(4, 120, 87, 0.55), rgba(4, 120, 87, 0.1) 66%, transparent 74%);
+  content: none;
 }
 
 .table-stage__center {
@@ -702,25 +694,15 @@ textarea {
   }
 
   .table-stage {
-    height: 580px;
+    height: auto;
   }
 }
 
 @media (max-width: 1440px) {
   .table-stage {
-    height: 980px;
-    padding: 28px 20px 34px;
-    align-items: stretch;
-  }
-
-  .table-stage::before {
-    inset: 8% 16%;
-    border-radius: 999px / 46%;
-  }
-
-  .table-stage__center {
-    width: min(540px, 68vw);
-    margin: auto 0;
+    height: auto;
+    padding: 0;
+    align-items: center;
   }
 
   .seat-card {
@@ -755,9 +737,6 @@ textarea {
     left: 2%;
   }
 
-  .board-panel__cards {
-    padding-top: 86px;
-  }
 }
 
 @media (max-width: 720px) {
@@ -776,12 +755,8 @@ textarea {
   }
 
   .table-stage {
-    height: 860px;
-    padding: 20px;
-  }
-
-  .table-stage::before {
-    inset: 10% 10%;
+    height: auto;
+    padding: 0;
   }
 
   .seat-card {
@@ -792,10 +767,6 @@ textarea {
   .table-layout__stats,
   .state-grid {
     grid-template-columns: 1fr;
-  }
-
-  .board-panel {
-    height: 252px;
   }
 
   .table-card {
@@ -829,10 +800,6 @@ textarea {
   .seat-bottom-left {
     bottom: 7%;
     left: 2%;
-  }
-
-  .board-panel__pot {
-    min-width: min(190px, 76vw);
   }
 
   .board-panel__pot-tooltip-content {

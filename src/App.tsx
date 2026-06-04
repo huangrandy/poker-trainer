@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PokerTableScene } from "./components/PokerTableScene";
 import { advanceBotTurns } from "./features/bots";
 import {
   applyAction,
@@ -561,70 +562,20 @@ export default function App() {
           </div>
         </div>
 
-        <div className="table-stage">
-          <div className="table-stage__center">
-            <div className="board-panel">
-              <div className="board-panel__pot">
-                <span className="board-panel__pot-label">{centerPotLabel}</span>
-                <strong>{centerPotAmount}</strong>
-                <button
-                  className="board-panel__pot-tooltip"
-                  type="button"
-                  aria-label={`Current street bet ${gameState.betting.currentBet}`}
-                  title={`Current street bet ${gameState.betting.currentBet}`}
-                >
-                  i
-                  <span className="board-panel__pot-tooltip-content">
-                    Current street bet {gameState.betting.currentBet}
-                  </span>
-                </button>
-              </div>
-              <div className="board-panel__cards">
-                {gameState.board.length > 0 ? (
-                  gameState.board.map((card, index) => (
-                    <TableCard
-                      key={`${card.rank}-${card.suit}-${index}`}
-                      rank={card.rank}
-                      suit={card.suit}
-                      isHighlighted={isHandComplete && highlightedCardKeys.has(getCardKey(card))}
-                      isMuted={isHandComplete && !highlightedCardKeys.has(getCardKey(card))}
-                      isFaceDown={streetReveal.active && index >= streetReveal.fromIndex}
-                    />
-                  ))
-                ) : (
-                  <span className="board-panel__empty">Community cards will appear here</span>
-                )}
-              </div>
-              {isHandComplete ? (
-                <div className="board-panel__footer">
-                  <span>Hand complete</span>
-                  <strong>{handResult ? "Revealed" : "Waiting"}</strong>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {latestActionLabel ? (
-            <div className="table-stage__action-callout" key={latestPlayerActionRecord?.id}>
-              {latestActionLabel}
-            </div>
-          ) : null}
-
-          <div className="seat-layer">
-            {activePlayers.map((player, index) => (
-              <SeatCard
-                key={player.id}
-                player={player}
-                isCurrentActor={player.id === currentActor?.id}
-                positionClass={getSeatPosition(index, activePlayers.length)}
-                actionLabel={visibleActionByPlayerId.get(player.id) ?? null}
-                actionPlacement={getSeatActionPlacement(getSeatPosition(index, activePlayers.length))}
-                revealResult={handResultByPlayerId.get(player.id) ?? null}
-                highlightedCardKeys={highlightedCardKeys}
-                isHandComplete={isHandComplete}
-              />
-            ))}
-          </div>
+        <div className="table-stage table-stage--demo">
+          <PokerTableScene
+            players={gameState.players}
+            board={gameState.board}
+            potLabel={centerPotLabel}
+            potAmount={centerPotAmount}
+            latestActionLabel={latestActionLabel}
+            latestActionKey={latestPlayerActionRecord?.id ?? null}
+            visibleActionByPlayerId={visibleActionByPlayerId}
+            handResultByPlayerId={handResultByPlayerId}
+            highlightedCardKeys={highlightedCardKeys}
+            streetReveal={streetReveal}
+            currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
+          />
         </div>
 
         <section className="table-actions" aria-label="Legal actions">

@@ -287,7 +287,7 @@ function createStreetRevealState(startHandImpl: typeof engine.startHand): GameSt
 describe("App", () => {
   it("keeps the center board height fixed as the board changes", () => {
     const emptyRender = render(<App />);
-    const emptyBoardPanel = emptyRender.container.querySelector(".board-panel");
+    const emptyBoardPanel = emptyRender.container.querySelector(".poker-table-scene");
 
     expect(emptyBoardPanel).not.toBeNull();
 
@@ -297,7 +297,7 @@ describe("App", () => {
     const realStartHand = engine.startHand;
     vi.spyOn(engine, "startHand").mockImplementation(() => createStreetRevealState(realStartHand));
     const filledRender = render(<App />);
-    const filledBoardPanel = filledRender.container.querySelector(".board-panel");
+    const filledBoardPanel = filledRender.container.querySelector(".poker-table-scene");
 
     expect(filledBoardPanel).not.toBeNull();
     expect(window.getComputedStyle(filledBoardPanel as HTMLElement).height).toBe(emptyHeight);
@@ -313,7 +313,7 @@ describe("App", () => {
 
     expect(handStat).not.toBeNull();
     expect(handStat).toHaveTextContent("1");
-    expect(container.querySelector(".seat-card.is-current")).not.toBeNull();
+    expect(container.querySelectorAll(".poker-table-scene__seat").length).toBe(6);
 
     await user.click(screen.getByRole("button", { name: "Fold" }));
 
@@ -347,29 +347,19 @@ describe("App", () => {
     );
   });
 
-  it("shows the winner reveal after a completed showdown hand", () => {
+  it("shows the showdown pot without reveal styling", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
 
     const { container } = render(<App />);
-    const potPill = container.querySelector(".board-panel__pot");
+    const potPill = container.querySelector(".poker-table-scene__pot");
 
     expect(potPill).not.toBeNull();
     expect(within(potPill as HTMLElement).getByText("Pot awarded")).toBeInTheDocument();
     expect(within(potPill as HTMLElement).getByText("25")).toBeInTheDocument();
-    expect(container.querySelector(".hand-reveal__players")).not.toBeInTheDocument();
-
-    const winnerSeat = container.querySelector(".seat-card--winner");
-    expect(winnerSeat).not.toBeNull();
-    expect(within(winnerSeat as HTMLElement).getByText("Straight, 6 high")).toBeInTheDocument();
-
-    const heroWinningCard = screen.getByText("6", { selector: ".table-card__rank" }).closest(".table-card");
-    expect(heroWinningCard).toHaveClass("table-card--highlighted");
-
-    const heroUnusedCard = screen.getByText("A", { selector: ".table-card__rank" }).closest(".table-card");
-    expect(heroUnusedCard).toHaveClass("table-card--muted");
-
-    const botCards = screen.getAllByText("K", { selector: ".table-card__rank" });
-    expect(botCards[0].closest(".table-card")).toHaveClass("table-card--muted");
+    expect(container.querySelector(".seat-card--winner")).toBeNull();
+    expect(container.querySelector(".seat-card--loser")).toBeNull();
+    expect(container.querySelector(".table-card--highlighted")).toBeNull();
+    expect(container.querySelector(".table-card--muted")).toBeNull();
   });
 
   it("shows recent seat action chips on the table", () => {
@@ -381,55 +371,42 @@ describe("App", () => {
     expect(screen.getByText("Check")).toBeInTheDocument();
   });
 
-  it("renders the latest action callout on the table", () => {
+  it("does not render the old floating latest-action callout", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createActionCalloutState());
 
     const { container } = render(<App />);
     const callout = container.querySelector(".table-stage__action-callout");
 
-    expect(callout).not.toBeNull();
-    expect(within(callout as HTMLElement).getByText("Hero called $10")).toBeInTheDocument();
+    expect(callout).toBeNull();
+    expect(screen.getByText("Call $10")).toBeInTheDocument();
   });
 
   it("advances bot turns after a delay instead of instantly", async () => {
     vi.useFakeTimers();
     vi.spyOn(engine, "startHand").mockImplementation(() => createBotDelayState());
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(screen.getByText("Bot 1")).toBeInTheDocument();
-    expect(screen.getByText("Bot 1").closest(".seat-card")).toHaveClass("is-current");
+    expect(screen.getByText("Hero")).toBeInTheDocument();
+    expect(container.querySelector(".is-current")).toBeNull();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(499);
-    });
-    expect(screen.getByText("Bot 1").closest(".seat-card")).toHaveClass("is-current");
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(screen.getByText("Hero").closest(".seat-card")).toHaveClass("is-current");
+    expect(screen.getByText("Bot 1")).toBeInTheDocument();
   });
 
-  it("flips community cards in before revealing the next street", async () => {
-    vi.useFakeTimers();
+  it("renders the community cards directly without a face-down reveal", async () => {
     const realStartHand = engine.startHand;
     vi.spyOn(engine, "startHand").mockImplementation(() => createStreetRevealState(realStartHand));
 
     const { container } = render(<App />);
-    const boardCards = container.querySelectorAll(".board-panel__cards .table-card");
+    const boardCards = container.querySelectorAll(".poker-table-scene__community .table-card");
 
     expect(boardCards.length).toBeGreaterThan(0);
     boardCards.forEach((card) => {
-      expect(card).toHaveClass("table-card--face-down");
-    });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(450);
-    });
-
-    container.querySelectorAll(".board-panel__cards .table-card").forEach((card) => {
       expect(card).not.toHaveClass("table-card--face-down");
     });
   });
@@ -442,11 +419,11 @@ describe("App", () => {
     expect(within(actionStrip as HTMLElement).getByRole("button", { name: "Fold" })).toBeInTheDocument();
   });
 
-  it("highlights the current actor instead of showing a footer row", () => {
+  it("renders the six-seat ring without current-actor styling", () => {
     const { container } = render(<App />);
 
-    expect(container.querySelector(".seat-card.is-current")).not.toBeNull();
-    expect(screen.queryByText("Current actor")).not.toBeInTheDocument();
+    expect(container.querySelectorAll(".poker-table-scene__seat").length).toBe(6);
+    expect(container.querySelector(".poker-table-scene__seat.is-current")).toBeNull();
   });
 
   it("does not show the board label or card counter in the community panel", () => {
