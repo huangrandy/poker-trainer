@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyAction, getLegalActions, startHand, startNextHand } from "./engine";
+import { applyAction, getLegalActions, rebuyPlayer, startHand, startNextHand } from "./engine";
 import { createSampleGameState } from "./fixtures";
-import type { GameState, PlayerState } from "./types";
+import type { Card, GameState, PlayerState } from "./types";
+
+function makeCard(rank: Card["rank"], suit: Card["suit"]): Card {
+  return { rank, suit };
+}
 
 function createThreePlayerGameState(): GameState {
   const state = createSampleGameState();
@@ -225,6 +229,115 @@ describe("engine basics", () => {
     expect(afterFold.players[0].status).toBe("folded");
     expect(afterFold.street).toBe("hand_complete");
     expect(afterFold.betting.currentActorSeatIndex).toBeNull();
+    expect(afterFold.players.find((player) => player.id === "bot-1")?.stack).toBe(1005);
+    expect(afterFold.pot.mainPot).toBe(0);
+  });
+
+  it("awards the pot to the showdown winner", () => {
+    const showdownState: GameState = {
+      ...createSampleGameState(),
+      handNumber: 3,
+      street: "river",
+      dealerSeatIndex: 0,
+      buttonSeatIndex: 0,
+      board: [
+        makeCard("2", "clubs"),
+        makeCard("3", "diamonds"),
+        makeCard("4", "hearts"),
+        makeCard("5", "spades"),
+        makeCard("9", "clubs"),
+      ],
+      deck: createSampleGameState().deck,
+      players: createSampleGameState().players.map((player) => {
+        if (player.id === "hero") {
+          return {
+            ...player,
+            stack: 995,
+            holeCards: [makeCard("A", "clubs"), makeCard("6", "clubs")],
+            currentStreetBet: 0,
+            totalCommittedThisHand: 10,
+            status: "active" as const,
+            hasActedThisStreet: true,
+          };
+        }
+
+        return {
+          ...player,
+          stack: 990,
+          holeCards: [makeCard("K", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 0,
+          totalCommittedThisHand: 10,
+          status: "active" as const,
+          hasActedThisStreet: true,
+        };
+      }),
+      betting: {
+        currentBet: 0,
+        minRaiseTo: 10,
+        lastAggressorSeatIndex: null,
+        currentActorSeatIndex: 0,
+      },
+      pot: {
+        mainPot: 25,
+        sidePots: [],
+      },
+      actionHistory: [],
+    };
+
+    const afterHeroCheck = applyAction(showdownState, {
+      type: "check",
+      playerId: "hero",
+    });
+    const finished = applyAction(afterHeroCheck, {
+      type: "check",
+      playerId: "bot-1",
+    });
+
+    expect(finished.street).toBe("hand_complete");
+    expect(finished.pot.mainPot).toBe(0);
+    expect(finished.players.find((player) => player.id === "hero")?.stack).toBe(1020);
+    expect(finished.players.find((player) => player.id === "bot-1")?.stack).toBe(990);
+  });
+
+  it("rebuying the hero restores chips for the next hand", () => {
+    const started = startHand(createSampleGameState(), { random: () => 0 });
+    const bustedHeroState: GameState = {
+      ...started,
+      street: "hand_complete",
+      board: [...started.board],
+      betting: {
+        ...started.betting,
+        currentActorSeatIndex: null,
+      },
+      pot: {
+        ...started.pot,
+        mainPot: 1010,
+      },
+      players: started.players.map((player) => {
+        if (player.id === "hero") {
+          return {
+            ...player,
+            stack: 0,
+            status: "all_in" as const,
+          };
+        }
+
+        return {
+          ...player,
+          stack: 990,
+        };
+      }),
+    };
+
+    const rebought = rebuyPlayer(bustedHeroState, "hero");
+    const nextHand = startNextHand(rebought, { random: () => 0 });
+
+    expect(rebought.players.find((player) => player.id === "hero")?.stack).toBe(1000);
+    expect(rebought.players.find((player) => player.id === "hero")?.status).toBe("waiting");
+    expect(nextHand.handNumber).toBe(2);
+    expect(nextHand.street).toBe("preflop");
+    expect(nextHand.players.find((player) => player.id === "hero")?.stack).toBe(990);
+    expect(nextHand.betting.currentActorSeatIndex).not.toBeNull();
   });
 
   it("starts consecutive hands from the completed table state without losing history", () => {

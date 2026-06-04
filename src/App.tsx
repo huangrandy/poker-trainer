@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { advanceBotTurns } from "./features/bots";
-import { applyAction, getLegalActions, startHand } from "./features/game-engine/engine";
+import {
+  applyAction,
+  getLegalActions,
+  rebuyPlayer,
+  startHand,
+  startNextHand,
+} from "./features/game-engine/engine";
 import { createSampleGameState } from "./features/game-engine/fixtures";
 import type { GameState, LegalAction, PlayerAction, PlayerState } from "./features/game-engine/types";
 
@@ -52,7 +58,7 @@ function formatPlayerStatus(player: PlayerState): string {
 
 function getSeatPosition(index: number, total: number): string {
   if (total <= 1) {
-    return "seat-center";
+    return "seat-bottom";
   }
 
   if (total === 2) {
@@ -223,6 +229,24 @@ export default function App() {
     return getLegalActions(gameState, currentActor.id);
   }, [gameState, currentActor]);
 
+  const restartablePlayers = gameState.players.filter(
+    (player) => player.status !== "out" && player.stack > 0
+  );
+  const canStartNextHand = gameState.street === "hand_complete" && restartablePlayers.length >= 2;
+  const heroPlayer = gameState.players.find((player) => player.isHero) ?? null;
+  const canRebuyHero =
+    gameState.street === "hand_complete" &&
+    heroPlayer?.stack === 0 &&
+    gameState.players.some((player) => !player.isHero && player.stack > 0);
+  const emptyActionMessage =
+    gameState.street === "hand_complete"
+      ? canStartNextHand
+        ? "Hand complete. Start a new hand to continue."
+        : canRebuyHero
+          ? "Hand complete. Rebuy the hero to continue."
+          : "Hand complete. Not enough players remain to start a new hand."
+      : "No legal actions available right now.";
+
   function handleAction(action: PlayerAction) {
     setGameState((previous) => {
       const nextState = applyAction(previous, action);
@@ -231,7 +255,27 @@ export default function App() {
   }
 
   function handleNewHand() {
-    setGameState(createInitialGameState());
+    if (!canStartNextHand) {
+      return;
+    }
+
+    setGameState((previous) => startNextHand(previous));
+  }
+
+  function handleRebuyAndStartNewHand() {
+    if (!canRebuyHero || !heroPlayer) {
+      return;
+    }
+
+    setGameState((previous) => {
+      const hero = previous.players.find((player) => player.isHero);
+
+      if (!hero || hero.stack > 0) {
+        return previous;
+      }
+
+      return startNextHand(rebuyPlayer(previous, hero.id));
+    });
   }
 
   const boardLabel = gameState.board.length === 0 ? "No board yet" : "Board";
@@ -314,16 +358,16 @@ export default function App() {
                 />
               ))
             ) : (
-              <p className="panel__empty">
-                {gameState.street === "hand_complete"
-                  ? "Hand complete. Start a new hand to continue."
-                  : "No legal actions available right now."}
-              </p>
+              <p className="panel__empty">{emptyActionMessage}</p>
             )}
           </div>
-          {gameState.street === "hand_complete" ? (
+          {canStartNextHand ? (
             <button className="primary-button" type="button" onClick={handleNewHand}>
               Start new hand
+            </button>
+          ) : canRebuyHero ? (
+            <button className="primary-button" type="button" onClick={handleRebuyAndStartNewHand}>
+              Rebuy and start new hand
             </button>
           ) : null}
         </article>

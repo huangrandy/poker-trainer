@@ -76,6 +76,242 @@ function getContendingPlayers(state: GameState): PlayerState[] {
   return state.players.filter((player) => player.status !== "folded" && player.status !== "out");
 }
 
+type HandRank = {
+  category: number;
+  tiebreakers: number[];
+};
+
+function rankCardValue(rank: string): number {
+  const values: Record<string, number> = {
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+    "7": 7,
+    "8": 8,
+    "9": 9,
+    T: 10,
+    J: 11,
+    Q: 12,
+    K: 13,
+    A: 14,
+  };
+
+  return values[rank] ?? 0;
+}
+
+function compareHandRanks(left: HandRank, right: HandRank): number {
+  if (left.category !== right.category) {
+    return left.category - right.category;
+  }
+
+  const tiebreakerCount = Math.max(left.tiebreakers.length, right.tiebreakers.length);
+
+  for (let index = 0; index < tiebreakerCount; index += 1) {
+    const leftValue = left.tiebreakers[index] ?? 0;
+    const rightValue = right.tiebreakers[index] ?? 0;
+
+    if (leftValue !== rightValue) {
+      return leftValue - rightValue;
+    }
+  }
+
+  return 0;
+}
+
+function getStraightHighCard(ranks: number[]): number | null {
+  const uniqueRanks = [...new Set(ranks)].sort((left, right) => right - left);
+
+  if (uniqueRanks.length !== 5) {
+    return null;
+  }
+
+  const wheel = [14, 5, 4, 3, 2];
+  const isWheel = wheel.every((rank, index) => uniqueRanks[index] === rank);
+
+  if (isWheel) {
+    return 5;
+  }
+
+  for (let index = 0; index < uniqueRanks.length - 1; index += 1) {
+    if (uniqueRanks[index] - 1 !== uniqueRanks[index + 1]) {
+      return null;
+    }
+  }
+
+  return uniqueRanks[0];
+}
+
+function getFiveCardHandRank(cards: GameState["board"]): HandRank {
+  const ranks = cards.map((card) => rankCardValue(card.rank)).sort((left, right) => right - left);
+  const suits = new Set(cards.map((card) => card.suit));
+  const isFlush = suits.size === 1;
+  const straightHighCard = getStraightHighCard(ranks);
+  const counts = new Map<number, number>();
+
+  for (const rank of ranks) {
+    counts.set(rank, (counts.get(rank) ?? 0) + 1);
+  }
+
+  const groupedRanks = [...counts.entries()]
+    .map(([rank, count]) => ({ rank, count }))
+    .sort((left, right) => {
+      if (left.count !== right.count) {
+        return right.count - left.count;
+      }
+
+      return right.rank - left.rank;
+    });
+
+  if (isFlush && straightHighCard !== null) {
+    return { category: 8, tiebreakers: [straightHighCard] };
+  }
+
+  if (groupedRanks[0]?.count === 4) {
+    const quadRank = groupedRanks[0].rank;
+    const kicker = groupedRanks.find((entry) => entry.rank !== quadRank)?.rank ?? 0;
+    return { category: 7, tiebreakers: [quadRank, kicker] };
+  }
+
+  if (groupedRanks[0]?.count === 3 && groupedRanks[1]?.count === 2) {
+    return {
+      category: 6,
+      tiebreakers: [groupedRanks[0].rank, groupedRanks[1].rank],
+    };
+  }
+
+  if (isFlush) {
+    return { category: 5, tiebreakers: ranks };
+  }
+
+  if (straightHighCard !== null) {
+    return { category: 4, tiebreakers: [straightHighCard] };
+  }
+
+  if (groupedRanks[0]?.count === 3) {
+    const tripsRank = groupedRanks[0].rank;
+    const kickers = groupedRanks
+      .filter((entry) => entry.rank !== tripsRank)
+      .map((entry) => entry.rank)
+      .sort((left, right) => right - left);
+
+    return { category: 3, tiebreakers: [tripsRank, ...kickers] };
+  }
+
+  if (groupedRanks[0]?.count === 2 && groupedRanks[1]?.count === 2) {
+    const pairRanks = [groupedRanks[0].rank, groupedRanks[1].rank].sort((left, right) => right - left);
+    const kicker = groupedRanks.find((entry) => entry.count === 1)?.rank ?? 0;
+
+    return { category: 2, tiebreakers: [...pairRanks, kicker] };
+  }
+
+  if (groupedRanks[0]?.count === 2) {
+    const pairRank = groupedRanks[0].rank;
+    const kickers = groupedRanks
+      .filter((entry) => entry.rank !== pairRank)
+      .map((entry) => entry.rank)
+      .sort((left, right) => right - left);
+
+    return { category: 1, tiebreakers: [pairRank, ...kickers] };
+  }
+
+  return { category: 0, tiebreakers: ranks };
+}
+
+function getBestHandRank(cards: GameState["board"]): HandRank {
+  if (cards.length < 5) {
+    return { category: 0, tiebreakers: cards.map((card) => rankCardValue(card.rank)).sort((left, right) => right - left) };
+  }
+
+  let bestRank: HandRank | null = null;
+
+  for (let first = 0; first < cards.length - 4; first += 1) {
+    for (let second = first + 1; second < cards.length - 3; second += 1) {
+      for (let third = second + 1; third < cards.length - 2; third += 1) {
+        for (let fourth = third + 1; fourth < cards.length - 1; fourth += 1) {
+          for (let fifth = fourth + 1; fifth < cards.length; fifth += 1) {
+            const rank = getFiveCardHandRank([
+              cards[first],
+              cards[second],
+              cards[third],
+              cards[fourth],
+              cards[fifth],
+            ]);
+
+            if (!bestRank || compareHandRanks(rank, bestRank) > 0) {
+              bestRank = rank;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return bestRank ?? { category: 0, tiebreakers: [] };
+}
+
+function chooseShowdownWinners(state: GameState): PlayerState[] {
+  const contenders = getContendingPlayers(state);
+
+  if (contenders.length <= 1) {
+    return contenders;
+  }
+
+  const rankedContenders = contenders.map((player) => ({
+    player,
+    rank: getBestHandRank([...player.holeCards, ...state.board]),
+  }));
+
+  rankedContenders.sort((left, right) => compareHandRanks(right.rank, left.rank));
+  const bestRank = rankedContenders[0]?.rank;
+
+  if (!bestRank) {
+    return [];
+  }
+
+  return rankedContenders
+    .filter((entry) => compareHandRanks(entry.rank, bestRank) === 0)
+    .map((entry) => entry.player);
+}
+
+function settleHandPot(state: GameState): GameState {
+  const nextState = cloneState(state);
+  const winners = chooseShowdownWinners(nextState);
+
+  if (winners.length === 0 || nextState.pot.mainPot === 0) {
+    nextState.pot = {
+      mainPot: 0,
+      sidePots: [],
+    };
+    nextState.street = "hand_complete";
+    nextState.betting.currentActorSeatIndex = null;
+    return nextState;
+  }
+
+  const potTotal = nextState.pot.mainPot;
+  const share = Math.floor(potTotal / winners.length);
+  let remainder = potTotal % winners.length;
+
+  const winnersBySeatOrder = [...winners].sort((left, right) => left.seatIndex - right.seatIndex);
+
+  for (const winner of winnersBySeatOrder) {
+    winner.stack += share + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) {
+      remainder -= 1;
+    }
+  }
+
+  nextState.pot = {
+    mainPot: 0,
+    sidePots: [],
+  };
+  nextState.street = "hand_complete";
+  nextState.betting.currentActorSeatIndex = null;
+
+  return nextState;
+}
+
 function getNextSeatIndex(seatIndexes: SeatIndex[], currentSeatIndex: SeatIndex | null): SeatIndex | null {
   if (seatIndexes.length === 0) {
     return null;
@@ -218,9 +454,8 @@ function finishHandAtShowdown(state: GameState): GameState {
       playerId: null,
     }),
   ];
-  nextState.street = "hand_complete";
 
-  return nextState;
+  return settleHandPot(nextState);
 }
 
 function runOutBoardAndFinishHand(state: GameState): GameState {
@@ -329,6 +564,20 @@ function resetPlayersForNewHand(state: GameState): GameState {
   return nextState;
 }
 
+export function rebuyPlayer(state: GameState, playerId: string): GameState {
+  const nextState = cloneState(state);
+  const player = getPlayerById(nextState, playerId);
+
+  player.stack = nextState.config.startingStack;
+  player.status = "waiting";
+  player.holeCards = [];
+  player.currentStreetBet = 0;
+  player.totalCommittedThisHand = 0;
+  player.hasActedThisStreet = false;
+
+  return nextState;
+}
+
 function createActionRecord(state: GameState, action: PlayerAction): ActionRecord {
   return {
     ...action,
@@ -358,9 +607,7 @@ function finalizeTurn(state: GameState): GameState {
   const contendingPlayers = getContendingPlayers(nextState);
 
   if (contendingPlayers.length <= 1) {
-    nextState.street = "hand_complete";
-    nextState.betting.currentActorSeatIndex = null;
-    return nextState;
+    return settleHandPot(nextState);
   }
 
   if (activePlayers.length === 0) {
