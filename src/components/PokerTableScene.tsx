@@ -18,6 +18,7 @@ type PokerTableSceneProps = {
   board: Card[];
   potLabel: string;
   potAmount: number;
+  showVillainHoleCards: boolean;
   latestActionLabel: string | null;
   latestActionKey: string | null;
   visibleActionByPlayerId: Map<string, string>;
@@ -260,6 +261,7 @@ export function PokerTableScene({
   board,
   potLabel,
   potAmount,
+  showVillainHoleCards,
   visibleActionByPlayerId,
 }: PokerTableSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -422,7 +424,8 @@ export function PokerTableScene({
                 zIndex: 3,
               }}
             >
-              {player?.holeCards.length ? (
+              {player?.holeCards.length &&
+              (player.isHero || showVillainHoleCards) ? (
                 <div
                   className="poker-table-scene__hole-cards"
                   style={{
