@@ -1,35 +1,23 @@
 # Tasks
 
-## Milestone 1: Pure engine skeleton
-- [ ] Define Card, Player, GameState, Street, Action types
-- [ ] Create deck/shuffle/deal utilities
-- [ ] Create `startHand`
-- [ ] Create `getLegalActions`
-- [ ] Create `applyAction`
-- [ ] Add tests for blinds, dealing, folding, calling/checking
+## Completed stabilization work
+- Core engine, deck/deal utilities, and action legality are implemented.
+- Simple bot auto-advance is implemented and guarded against stale hand-complete states.
+- Table UI, action buttons, action history, and responsive seat layout are implemented.
+- Hand settlement on fold and showdown is implemented.
+- Rebuy flow for a busted hero is implemented.
+- Regression coverage exists for engine, bot, App, and UI restart flows.
+- Docs have been updated to reflect the current MVP state.
 
-## Milestone 2: Minimal bot loop
-- [ ] Add simple bot strategy
-- [ ] Bot chooses only legal actions
-- [ ] Game can auto-advance through bot turns
-- [ ] Tests for bot legal action selection
+## Next product-layer additions
+- Hand history export or local persistence.
+- Winner / settlement summary in the UI after a hand ends.
+- A clearer current-state debug panel for future analysis.
+- Replay or review of prior hands.
+- Stats or training dashboard.
 
-## Milestone 3: Minimal table UI
-- [ ] Render table
-- [ ] Render seats/stacks/cards
-- [ ] Render board/pot/street
-- [ ] Render action buttons for human player
-- [ ] Human can play one full hand
-
-## Milestone 4: Hand history and state export
-- [ ] Serialize current hand to JSON
-- [ ] Save history in localStorage or export as file
-- [ ] Add current-state debug panel
-- [ ] Prepare format for future Codex analysis
-
-## Later
-- [ ] AI analysis panel
-- [ ] Bot personas
-- [ ] Replay hands
-- [ ] Animations
-- [ ] Stats dashboard
+## Future / later
+- AI analysis panel.
+- Bot personas or stronger bot strategy.
+- Advanced animations and motion polish.
+- Multiplayer / persistence backend.

@@ -1,6 +1,7 @@
 import { createStandardDeck, drawCards, shuffleDeck } from "../../lib/poker/deck";
 import type {
   ActionRecord,
+  HandRevealPlayerResult,
   GameState,
   LegalAction,
   PlayerAction,
@@ -41,6 +42,16 @@ function cloneState(state: GameState): GameState {
     actionHistory: state.actionHistory.map((record) => ({
       ...record,
     })),
+    lastHandResult: state.lastHandResult
+      ? {
+          ...state.lastHandResult,
+          winnerIds: [...state.lastHandResult.winnerIds],
+          playerResults: state.lastHandResult.playerResults.map((result) => ({
+            ...result,
+            cardsUsed: result.cardsUsed.map((card) => ({ ...card })),
+          })),
+        }
+      : null,
   };
 }
 
@@ -79,6 +90,11 @@ function getContendingPlayers(state: GameState): PlayerState[] {
 type HandRank = {
   category: number;
   tiebreakers: number[];
+};
+
+type HandEvaluation = HandRank & {
+  cards: GameState["board"];
+  label: string;
 };
 
 function rankCardValue(rank: string): number {
@@ -141,6 +157,71 @@ function getStraightHighCard(ranks: number[]): number | null {
   }
 
   return uniqueRanks[0];
+}
+
+function getRankLabel(rank: number): string {
+  const labels: Record<number, string> = {
+    2: "2",
+    3: "3",
+    4: "4",
+    5: "5",
+    6: "6",
+    7: "7",
+    8: "8",
+    9: "9",
+    10: "T",
+    11: "J",
+    12: "Q",
+    13: "K",
+    14: "A",
+  };
+
+  return labels[rank] ?? `${rank}`;
+}
+
+function getRankWord(rank: number): string {
+  const words: Record<number, string> = {
+    2: "deuces",
+    3: "treys",
+    4: "fours",
+    5: "fives",
+    6: "sixes",
+    7: "sevens",
+    8: "eights",
+    9: "nines",
+    10: "tens",
+    11: "jacks",
+    12: "queens",
+    13: "kings",
+    14: "aces",
+  };
+
+  return words[rank] ?? `${rank}s`;
+}
+
+function buildHandLabel(rank: HandRank): string {
+  const [first = 0, second = 0, third = 0] = rank.tiebreakers;
+
+  switch (rank.category) {
+    case 8:
+      return `Straight flush, ${getRankLabel(first)} high`;
+    case 7:
+      return `Four of a kind, ${getRankWord(first)} with ${getRankLabel(second)} kicker`;
+    case 6:
+      return `Full house, ${getRankWord(first)} full of ${getRankWord(second)}`;
+    case 5:
+      return `Flush, ${getRankLabel(first)} high`;
+    case 4:
+      return `Straight, ${getRankLabel(first)} high`;
+    case 3:
+      return `Three of a kind, ${getRankWord(first)} with ${getRankLabel(second)} and ${getRankLabel(third)} kickers`;
+    case 2:
+      return `Two pair, ${getRankWord(first)} and ${getRankWord(second)} with ${getRankLabel(third)} kicker`;
+    case 1:
+      return `Pair of ${getRankWord(first)} with ${getRankLabel(second)}, ${getRankLabel(third)} and ${getRankLabel(rank.tiebreakers[3] ?? 0)} kickers`;
+    default:
+      return `High card ${getRankLabel(first)}`;
+  }
 }
 
 function getFiveCardHandRank(cards: GameState["board"]): HandRank {
@@ -219,19 +300,38 @@ function getFiveCardHandRank(cards: GameState["board"]): HandRank {
   return { category: 0, tiebreakers: ranks };
 }
 
-function getBestHandRank(cards: GameState["board"]): HandRank {
+function getFiveCardHandEvaluation(cards: GameState["board"]): HandEvaluation {
+  const rank = getFiveCardHandRank(cards);
+
+  return {
+    ...rank,
+    cards,
+    label: buildHandLabel(rank),
+  };
+}
+
+function getBestHandEvaluation(cards: GameState["board"]): HandEvaluation {
   if (cards.length < 5) {
-    return { category: 0, tiebreakers: cards.map((card) => rankCardValue(card.rank)).sort((left, right) => right - left) };
+    const rank = {
+      category: 0,
+      tiebreakers: cards.map((card) => rankCardValue(card.rank)).sort((left, right) => right - left),
+    };
+
+    return {
+      ...rank,
+      cards,
+      label: buildHandLabel(rank),
+    };
   }
 
-  let bestRank: HandRank | null = null;
+  let bestRank: HandEvaluation | null = null;
 
   for (let first = 0; first < cards.length - 4; first += 1) {
     for (let second = first + 1; second < cards.length - 3; second += 1) {
       for (let third = second + 1; third < cards.length - 2; third += 1) {
         for (let fourth = third + 1; fourth < cards.length - 1; fourth += 1) {
           for (let fifth = fourth + 1; fifth < cards.length; fifth += 1) {
-            const rank = getFiveCardHandRank([
+            const rank = getFiveCardHandEvaluation([
               cards[first],
               cards[second],
               cards[third],
@@ -248,7 +348,7 @@ function getBestHandRank(cards: GameState["board"]): HandRank {
     }
   }
 
-  return bestRank ?? { category: 0, tiebreakers: [] };
+  return bestRank ?? { category: 0, tiebreakers: [], cards: [], label: "High card" };
 }
 
 function chooseShowdownWinners(state: GameState): PlayerState[] {
@@ -260,7 +360,7 @@ function chooseShowdownWinners(state: GameState): PlayerState[] {
 
   const rankedContenders = contenders.map((player) => ({
     player,
-    rank: getBestHandRank([...player.holeCards, ...state.board]),
+    rank: getBestHandEvaluation([...player.holeCards, ...state.board]),
   }));
 
   rankedContenders.sort((left, right) => compareHandRanks(right.rank, left.rank));
@@ -278,6 +378,7 @@ function chooseShowdownWinners(state: GameState): PlayerState[] {
 function settleHandPot(state: GameState): GameState {
   const nextState = cloneState(state);
   const winners = chooseShowdownWinners(nextState);
+  const potTotal = nextState.pot.mainPot;
 
   if (winners.length === 0 || nextState.pot.mainPot === 0) {
     nextState.pot = {
@@ -289,11 +390,12 @@ function settleHandPot(state: GameState): GameState {
     return nextState;
   }
 
-  const potTotal = nextState.pot.mainPot;
   const share = Math.floor(potTotal / winners.length);
   let remainder = potTotal % winners.length;
 
   const winnersBySeatOrder = [...winners].sort((left, right) => left.seatIndex - right.seatIndex);
+  const winnerIds = winnersBySeatOrder.map((winner) => winner.id);
+  const playerResults: HandRevealPlayerResult[] = [];
 
   for (const winner of winnersBySeatOrder) {
     winner.stack += share + (remainder > 0 ? 1 : 0);
@@ -302,9 +404,44 @@ function settleHandPot(state: GameState): GameState {
     }
   }
 
+  if (state.street === "showdown") {
+    for (const player of nextState.players) {
+      const evaluation = getBestHandEvaluation([...player.holeCards, ...nextState.board]);
+      const isWinner = winnerIds.includes(player.id);
+
+      playerResults.push({
+        playerId: player.id,
+        seatIndex: player.seatIndex,
+        name: player.name,
+        isWinner,
+        handLabel: isWinner ? evaluation.label : evaluation.label,
+        cardsUsed: isWinner ? evaluation.cards.map((card) => ({ ...card })) : [],
+      });
+    }
+  } else {
+    for (const player of nextState.players) {
+      const isWinner = winnerIds.includes(player.id);
+
+      playerResults.push({
+        playerId: player.id,
+        seatIndex: player.seatIndex,
+        name: player.name,
+        isWinner,
+        handLabel: isWinner ? "Won by fold" : "Folded",
+        cardsUsed: isWinner ? player.holeCards.map((card) => ({ ...card })) : [],
+      });
+    }
+  }
+
   nextState.pot = {
     mainPot: 0,
     sidePots: [],
+  };
+  nextState.lastHandResult = {
+    kind: state.street === "showdown" ? "showdown" : "fold",
+    potAwarded: potTotal,
+    winnerIds,
+    playerResults: playerResults.sort((left, right) => left.seatIndex - right.seatIndex),
   };
   nextState.street = "hand_complete";
   nextState.betting.currentActorSeatIndex = null;
@@ -560,6 +697,7 @@ function resetPlayersForNewHand(state: GameState): GameState {
   nextState.street = "not_started";
   nextState.dealerSeatIndex = null;
   nextState.buttonSeatIndex = null;
+  nextState.lastHandResult = null;
 
   return nextState;
 }

@@ -53,6 +53,22 @@ export type PlayerState = {
   hasActedThisStreet: boolean;
 };
 
+export type HandRevealPlayerResult = {
+  playerId: PlayerId;
+  seatIndex: SeatIndex;
+  name: string;
+  isWinner: boolean;
+  handLabel: string;
+  cardsUsed: Card[];
+};
+
+export type HandReveal = {
+  kind: "fold" | "showdown";
+  potAwarded: number;
+  winnerIds: PlayerId[];
+  playerResults: HandRevealPlayerResult[];
+};
+
 export type BlindConfig = {
   smallBlind: number;
   bigBlind: number;
@@ -132,6 +148,7 @@ export type GameState = {
   betting: BettingState;
   pot: PotState;
   actionHistory: ActionRecord[];
+  lastHandResult: HandReveal | null;
 };
 
 export type GameSnapshotForAnalysis = {

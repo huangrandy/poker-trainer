@@ -13,6 +13,8 @@ Every game action should be explicit:
 - DEAL_NEXT_STREET
 - SHOWDOWN
 
+Hand-end settlement should also be explicit in the engine, even if it is implemented as an internal helper rather than a public action.
+
 Avoid mutating GameState directly unless using a clear internal helper.
 
 ## Legal actions
@@ -32,4 +34,5 @@ Avoid functions, classes, Maps, Sets, or circular references inside persisted Ga
 - Specs come before implementation changes.
 - Engine, bot, and lifecycle behavior changes must be backed by failing tests first.
 - UI layout issues require manual visual acceptance criteria in addition to code review.
-- `App.tsx` currently orchestrates bootstrapping and bot advancement, so it should not be refactored casually during stabilization.
+- `App.tsx` currently orchestrates bootstrapping, bot advancement, and hand restart/rebuy, so it should not be refactored casually during stabilization.
+- The engine now owns hand settlement and rebuy-enabling state transitions; UI code should only trigger those flows.

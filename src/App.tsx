@@ -8,7 +8,14 @@ import {
   startNextHand,
 } from "./features/game-engine/engine";
 import { createSampleGameState } from "./features/game-engine/fixtures";
-import type { GameState, LegalAction, PlayerAction, PlayerState } from "./features/game-engine/types";
+import type {
+  Card,
+  GameState,
+  HandRevealPlayerResult,
+  LegalAction,
+  PlayerAction,
+  PlayerState,
+} from "./features/game-engine/types";
 
 function formatCardLabel(rank: string, suit: string): string {
   const suitSymbols: Record<string, string> = {
@@ -19,6 +26,10 @@ function formatCardLabel(rank: string, suit: string): string {
   };
 
   return `${rank}${suitSymbols[suit] ?? suit}`;
+}
+
+function getCardKey(card: Card): string {
+  return `${card.rank}:${card.suit}`;
 }
 
 function getSuitSymbol(suit: string): string {
@@ -97,9 +108,29 @@ function createInitialGameState(): GameState {
   return startHand(createSampleGameState());
 }
 
-function TableCard({ rank, suit }: { rank: string; suit: string }) {
+function TableCard({
+  rank,
+  suit,
+  isHighlighted = false,
+  isMuted = false,
+}: {
+  rank: string;
+  suit: string;
+  isHighlighted?: boolean;
+  isMuted?: boolean;
+}) {
   return (
-    <span className={`table-card table-card--${getSuitTone(suit)}`}>
+    <span
+      aria-label={formatCardLabel(rank, suit)}
+      className={[
+        "table-card",
+        `table-card--${getSuitTone(suit)}`,
+        isHighlighted ? "table-card--highlighted" : "",
+        isMuted ? "table-card--muted" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <span className="table-card__rank">{rank}</span>
       <span className="table-card__suit">{getSuitSymbol(suit)}</span>
     </span>
@@ -110,13 +141,30 @@ function SeatCard({
   player,
   isCurrentActor,
   positionClass,
+  revealResult,
+  highlightedCardKeys,
+  isHandComplete,
 }: {
   player: PlayerState;
   isCurrentActor: boolean;
   positionClass: string;
+  revealResult: HandRevealPlayerResult | null;
+  highlightedCardKeys: Set<string>;
+  isHandComplete: boolean;
 }) {
+  const isWinner = revealResult?.isWinner ?? false;
+  const cardIsHighlighted = (card: Card) => highlightedCardKeys.has(getCardKey(card));
+  const seatClasses = [
+    "seat-card",
+    positionClass,
+    isCurrentActor ? "is-current" : "",
+    isHandComplete && revealResult ? (isWinner ? "seat-card--winner" : "seat-card--loser") : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <article className={`seat-card ${positionClass} ${isCurrentActor ? "is-current" : ""}`}>
+    <article className={seatClasses}>
       <div className="seat-card__header">
         <strong>{player.name}</strong>
         <span>{formatPlayerStatus(player)}</span>
@@ -125,10 +173,17 @@ function SeatCard({
         <span>Stack {player.stack}</span>
         <span>Bet {player.currentStreetBet}</span>
       </div>
+      {revealResult ? <div className="seat-card__result">{revealResult.handLabel}</div> : null}
       <div className="seat-card__cards">
         {player.holeCards.length > 0 ? (
           player.holeCards.map((card, index) => (
-            <TableCard key={`${player.id}-${card.rank}-${card.suit}-${index}`} rank={card.rank} suit={card.suit} />
+            <TableCard
+              key={`${player.id}-${card.rank}-${card.suit}-${index}`}
+              rank={card.rank}
+              suit={card.suit}
+              isHighlighted={isHandComplete && revealResult ? cardIsHighlighted(card) : false}
+              isMuted={isHandComplete && revealResult ? !cardIsHighlighted(card) : false}
+            />
           ))
         ) : (
           <span className="seat-card__empty">No hole cards</span>
@@ -229,6 +284,31 @@ export default function App() {
     return getLegalActions(gameState, currentActor.id);
   }, [gameState, currentActor]);
 
+  const handResult = gameState.lastHandResult;
+  const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
+  const handResultByPlayerId = useMemo(
+    () =>
+      new Map(
+        handResult?.playerResults.map((result) => [result.playerId, result] as const) ?? []
+      ),
+    [handResult]
+  );
+  const highlightedCardKeys = useMemo(() => {
+    const keys = new Set<string>();
+
+    for (const result of handResult?.playerResults ?? []) {
+      if (!result.isWinner) {
+        continue;
+      }
+
+      for (const card of result.cardsUsed) {
+        keys.add(getCardKey(card));
+      }
+    }
+
+    return keys;
+  }, [handResult]);
+
   const restartablePlayers = gameState.players.filter(
     (player) => player.status !== "out" && player.stack > 0
   );
@@ -315,16 +395,45 @@ export default function App() {
               <div className="board-panel__cards">
                 {gameState.board.length > 0 ? (
                   gameState.board.map((card, index) => (
-                    <TableCard key={`${card.rank}-${card.suit}-${index}`} rank={card.rank} suit={card.suit} />
+                    <TableCard
+                      key={`${card.rank}-${card.suit}-${index}`}
+                      rank={card.rank}
+                      suit={card.suit}
+                      isHighlighted={isHandComplete && highlightedCardKeys.has(getCardKey(card))}
+                      isMuted={isHandComplete && !highlightedCardKeys.has(getCardKey(card))}
+                    />
                   ))
                 ) : (
                   <span className="board-panel__empty">Community cards will appear here</span>
                 )}
               </div>
-              <div className="board-panel__row">
-                <span>Current actor</span>
-                <strong>{currentActor ? currentActor.name : "None"}</strong>
-              </div>
+              {isHandComplete && handResult ? (
+                <div className="hand-reveal">
+                  <div className="hand-reveal__pot">
+                    <span>Pot awarded</span>
+                    <strong>{handResult.potAwarded}</strong>
+                  </div>
+                  <ul className="hand-reveal__players">
+                    {handResult.playerResults.map((result) => (
+                      <li
+                        key={result.playerId}
+                        className={result.isWinner ? "is-winner" : "is-loser"}
+                      >
+                        <div className="hand-reveal__player-name">
+                          <strong>{result.name}</strong>
+                          {result.isWinner ? <span>Winner</span> : <span>Lost</span>}
+                        </div>
+                        <span>{result.handLabel}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="board-panel__row">
+                  <span>Current actor</span>
+                  <strong>{currentActor ? currentActor.name : "None"}</strong>
+                </div>
+              )}
             </div>
           </div>
 
@@ -335,6 +444,9 @@ export default function App() {
                 player={player}
                 isCurrentActor={player.id === currentActor?.id}
                 positionClass={getSeatPosition(index, activePlayers.length)}
+                revealResult={handResultByPlayerId.get(player.id) ?? null}
+                highlightedCardKeys={highlightedCardKeys}
+                isHandComplete={isHandComplete}
               />
             ))}
           </div>

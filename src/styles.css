@@ -191,6 +191,18 @@ textarea {
   box-shadow: 0 14px 24px rgba(15, 23, 42, 0.28);
 }
 
+.table-card--highlighted {
+  box-shadow:
+    0 0 0 2px rgba(125, 211, 252, 0.55),
+    0 18px 28px rgba(15, 23, 42, 0.34);
+  transform: translateY(-1px);
+}
+
+.table-card--muted {
+  opacity: 0.36;
+  filter: saturate(0.7) brightness(0.72);
+}
+
 .table-card--black {
   color: #0f172a;
 }
@@ -229,6 +241,17 @@ textarea {
   box-shadow: 0 16px 34px rgba(2, 6, 23, 0.35);
 }
 
+.seat-card--winner {
+  border-color: rgba(16, 185, 129, 0.8);
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.16),
+    0 20px 48px rgba(16, 185, 129, 0.18);
+}
+
+.seat-card--loser {
+  filter: brightness(0.8) saturate(0.88);
+}
+
 .seat-card.is-current {
   border-color: rgba(125, 211, 252, 0.8);
   box-shadow:
@@ -245,6 +268,12 @@ textarea {
 
 .seat-card__meta {
   margin-top: 10px;
+}
+
+.seat-card__result {
+  margin-top: 10px;
+  color: #cbd5e1;
+  font-size: 0.84rem;
 }
 
 .seat-card__cards {
@@ -290,6 +319,69 @@ textarea {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+}
+
+.hand-reveal {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  display: grid;
+  gap: 14px;
+}
+
+.hand-reveal__pot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.hand-reveal__pot span {
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.hand-reveal__pot strong {
+  font-size: 1.5rem;
+  color: #f8fafc;
+}
+
+.hand-reveal__players {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.hand-reveal__players li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.hand-reveal__players li.is-winner {
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.hand-reveal__players li.is-loser {
+  opacity: 0.74;
+}
+
+.hand-reveal__player-name {
+  display: grid;
+  gap: 4px;
+}
+
+.hand-reveal__player-name span {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .dashboard {

@@ -231,6 +231,13 @@ describe("engine basics", () => {
     expect(afterFold.betting.currentActorSeatIndex).toBeNull();
     expect(afterFold.players.find((player) => player.id === "bot-1")?.stack).toBe(1005);
     expect(afterFold.pot.mainPot).toBe(0);
+    expect(afterFold.lastHandResult?.kind).toBe("fold");
+    expect(afterFold.lastHandResult?.potAwarded).toBe(15);
+    expect(afterFold.lastHandResult?.winnerIds).toEqual(["bot-1"]);
+    expect(afterFold.lastHandResult?.playerResults.find((player) => player.playerId === "hero")?.handLabel).toBe("Folded");
+    expect(afterFold.lastHandResult?.playerResults.find((player) => player.playerId === "bot-1")?.handLabel).toBe(
+      "Won by fold"
+    );
   });
 
   it("awards the pot to the showdown winner", () => {
@@ -297,6 +304,88 @@ describe("engine basics", () => {
     expect(finished.pot.mainPot).toBe(0);
     expect(finished.players.find((player) => player.id === "hero")?.stack).toBe(1020);
     expect(finished.players.find((player) => player.id === "bot-1")?.stack).toBe(990);
+    expect(finished.lastHandResult?.kind).toBe("showdown");
+    expect(finished.lastHandResult?.potAwarded).toBe(25);
+    expect(finished.lastHandResult?.winnerIds).toEqual(["hero"]);
+    expect(finished.lastHandResult?.playerResults.find((player) => player.playerId === "hero")?.handLabel).toContain(
+      "Straight"
+    );
+    expect(finished.lastHandResult?.playerResults.find((player) => player.playerId === "hero")?.cardsUsed).toHaveLength(5);
+  });
+
+  it("splits the pot on a tied showdown", () => {
+    const tieState: GameState = {
+      ...createSampleGameState(),
+      handNumber: 4,
+      street: "river",
+      dealerSeatIndex: 0,
+      buttonSeatIndex: 0,
+      board: [
+        makeCard("2", "clubs"),
+        makeCard("2", "diamonds"),
+        makeCard("5", "hearts"),
+        makeCard("5", "spades"),
+        makeCard("A", "clubs"),
+      ],
+      deck: createSampleGameState().deck,
+      players: createSampleGameState().players.map((player) => {
+        if (player.id === "hero") {
+          return {
+            ...player,
+            stack: 1000,
+            holeCards: [makeCard("K", "clubs"), makeCard("Q", "diamonds")],
+            currentStreetBet: 0,
+            totalCommittedThisHand: 10,
+            status: "active" as const,
+            hasActedThisStreet: true,
+          };
+        }
+
+        return {
+          ...player,
+          stack: 1000,
+          holeCards: [makeCard("J", "clubs"), makeCard("T", "diamonds")],
+          currentStreetBet: 0,
+          totalCommittedThisHand: 10,
+          status: "active" as const,
+          hasActedThisStreet: true,
+        };
+      }),
+      betting: {
+        currentBet: 0,
+        minRaiseTo: 10,
+        lastAggressorSeatIndex: null,
+        currentActorSeatIndex: 0,
+      },
+      pot: {
+        mainPot: 20,
+        sidePots: [],
+      },
+      actionHistory: [],
+      lastHandResult: null,
+    };
+
+    const afterHeroCheck = applyAction(tieState, {
+      type: "check",
+      playerId: "hero",
+    });
+    const finished = applyAction(afterHeroCheck, {
+      type: "check",
+      playerId: "bot-1",
+    });
+
+    expect(finished.street).toBe("hand_complete");
+    expect(finished.pot.mainPot).toBe(0);
+    expect(finished.players.find((player) => player.id === "hero")?.stack).toBe(1010);
+    expect(finished.players.find((player) => player.id === "bot-1")?.stack).toBe(1010);
+    expect(finished.lastHandResult?.kind).toBe("showdown");
+    expect(finished.lastHandResult?.winnerIds).toEqual(["hero", "bot-1"]);
+    expect(
+      finished.lastHandResult?.playerResults.find((player) => player.playerId === "hero")?.handLabel
+    ).toContain("Two pair");
+    expect(
+      finished.lastHandResult?.playerResults.find((player) => player.playerId === "bot-1")?.handLabel
+    ).toContain("Two pair");
   });
 
   it("rebuying the hero restores chips for the next hand", () => {
@@ -369,5 +458,7 @@ describe("engine basics", () => {
     expect(nextNextHand.buttonSeatIndex).toBe(0);
     expect(nextNextHand.betting.currentActorSeatIndex).toBe(0);
     expect(nextNextHand.actionHistory.at(-1)?.type).toBe("start_hand");
+    expect(nextHand.lastHandResult).toBeNull();
+    expect(nextNextHand.lastHandResult).toBeNull();
   });
 });

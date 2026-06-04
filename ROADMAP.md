@@ -1,21 +1,18 @@
 # Roadmap
 
-## Now
-Working local poker game with simple bots.
+## Current state
+- Stabilized local Texas Hold'em MVP is implemented.
+- Engine lifecycle, bot auto-advance, UI restart/rebuy, and pot settlement are covered by tests.
+- The planning docs now reflect the current codebase.
 
-## Next
-Save/export hand histories and current game state.
+## Next product-layer work
+1. Hand history export or local persistence.
+2. Visible settlement / winner summary in the UI.
+3. Replay or review of prior hands.
+4. Stats or training dashboard.
 
-## Later
-Codex/AI analysis can read the exported state and explain:
-- Current situation
-- Pot odds
-- Legal actions
-- Suggested move
-- Mistakes after hand ends
-
-## Much later
-- Better bot strategies
-- GTO-ish ranges
-- Training drills
-- Replay review
+## Later / exploratory
+- AI analysis panel.
+- Stronger bot personas or strategy.
+- Advanced animations and motion polish.
+- Multiplayer and backend persistence.

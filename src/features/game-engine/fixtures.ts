@@ -59,6 +59,7 @@ export function createSampleGameState(): GameState {
       sidePots: [],
     },
     actionHistory: [],
+    lastHandResult: null,
   };
 }
 

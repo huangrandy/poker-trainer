@@ -1,9 +1,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { within } from "@testing-library/dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as engine from "./features/game-engine/engine";
 import { createSampleGameState } from "./features/game-engine/fixtures";
-import type { GameState } from "./features/game-engine/types";
+import type { Card, GameState } from "./features/game-engine/types";
 
 import App from "./App";
 
@@ -41,6 +42,73 @@ function createBustedHeroState(startHandImpl: typeof engine.startHand): GameStat
       };
     }),
   };
+}
+
+function makeCard(rank: Card["rank"], suit: Card["suit"]): Card {
+  return { rank, suit };
+}
+
+function createShowdownRevealState(): GameState {
+  const showdownState: GameState = {
+    ...createSampleGameState(),
+    handNumber: 3,
+    street: "river",
+    dealerSeatIndex: 0,
+    buttonSeatIndex: 0,
+    board: [
+      makeCard("2", "clubs"),
+      makeCard("3", "diamonds"),
+      makeCard("4", "hearts"),
+      makeCard("5", "spades"),
+      makeCard("9", "clubs"),
+    ],
+    deck: createSampleGameState().deck,
+    players: createSampleGameState().players.map((player) => {
+      if (player.id === "hero") {
+        return {
+          ...player,
+          stack: 995,
+          holeCards: [makeCard("A", "clubs"), makeCard("6", "clubs")],
+          currentStreetBet: 0,
+          totalCommittedThisHand: 10,
+          status: "active" as const,
+          hasActedThisStreet: true,
+        };
+      }
+
+      return {
+        ...player,
+        stack: 990,
+        holeCards: [makeCard("K", "clubs"), makeCard("K", "diamonds")],
+        currentStreetBet: 0,
+        totalCommittedThisHand: 10,
+        status: "active" as const,
+        hasActedThisStreet: true,
+      };
+    }),
+    betting: {
+      currentBet: 0,
+      minRaiseTo: 10,
+      lastAggressorSeatIndex: null,
+      currentActorSeatIndex: 0,
+    },
+    pot: {
+      mainPot: 25,
+      sidePots: [],
+    },
+    actionHistory: [],
+    lastHandResult: null,
+  };
+
+  const afterHeroCheck = engine.applyAction(showdownState, {
+    type: "check",
+    playerId: "hero",
+  });
+
+  return engine.applyAction(afterHeroCheck, {
+    type: "check",
+    playerId: "bot-1",
+  });
 }
 
 describe("App", () => {
@@ -84,5 +152,30 @@ describe("App", () => {
     expect(screen.getByText("Street", { exact: true }).parentElement).toHaveTextContent(
       "preflop"
     );
+  });
+
+  it("shows the winner reveal after a completed showdown hand", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
+
+    const { container } = render(<App />);
+    const handReveal = container.querySelector(".hand-reveal");
+
+    expect(screen.getByText("Pot awarded")).toBeInTheDocument();
+    expect(screen.getByText("25")).toBeInTheDocument();
+    expect(handReveal).not.toBeNull();
+    const reveal = within(handReveal as HTMLElement);
+    expect(reveal.getByText("Hero")).toBeInTheDocument();
+    expect(reveal.getByText("Bot 1")).toBeInTheDocument();
+    expect(reveal.getByText("Straight, 6 high")).toBeInTheDocument();
+
+    const heroWinningCard = screen.getByText("6", { selector: ".table-card__rank" }).closest(".table-card");
+    expect(heroWinningCard).toHaveClass("table-card--highlighted");
+
+    const heroUnusedCard = screen.getByText("A", { selector: ".table-card__rank" }).closest(".table-card");
+    expect(heroUnusedCard).toHaveClass("table-card--muted");
+
+    const botCards = screen.getAllByText("K", { selector: ".table-card__rank" });
+    expect(botCards[0].closest(".table-card")).toHaveClass("table-card--muted");
+    expect(container.querySelector(".hand-reveal")).toBeInTheDocument();
   });
 });

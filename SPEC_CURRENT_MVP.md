@@ -10,8 +10,11 @@ The app currently supports:
 - action buttons
 - action history
 - starting next hands
+- pot settlement at hand end
+- rebuying a busted hero before the next hand
 
 AI analysis, animations, advanced bot strategy, hand evaluator correctness, multiplayer, database persistence, and GTO are out of scope for stabilization.
+Full rule-complete hand-evaluator correctness is also out of scope; the current MVP only needs enough showdown evaluation to settle the hand correctly.
 
 ## Hand lifecycle acceptance criteria
 
@@ -23,6 +26,10 @@ AI analysis, animations, advanced bot strategy, hand evaluator correctness, mult
 - A new hand must reset board cards, pot totals, street bets, hole cards, current actor, and per-street flags.
 - Players with zero stack must be marked `out`.
 - A hand must end as `hand_complete` when fewer than two active contenders remain.
+- Fold-ending hands must award the pot to the last remaining contender before the next hand starts.
+- Showdown-ending hands must award the pot to the best remaining hand before the next hand starts.
+- Tied showdown hands must split the pot according to the engine's settlement rule.
+- A busted hero must be able to rebuy from the `hand_complete` state when the table can continue.
 
 ## Betting/legal action acceptance criteria
 
