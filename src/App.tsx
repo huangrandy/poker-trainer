@@ -69,7 +69,7 @@ function getLegalActionLabel(action: LegalAction): string {
 }
 
 function createInitialGameState(): GameState {
-  return startHand(createSampleGameState(), { random: () => 0 });
+  return startHand(createSampleGameState());
 }
 
 function TableCard({ rank, suit }: { rank: string; suit: string }) {
