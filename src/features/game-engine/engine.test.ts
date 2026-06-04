@@ -43,8 +43,63 @@ describe("engine basics", () => {
       playerId: "bot-1",
     });
 
-    expect(afterCheck.players[1].hasActedThisStreet).toBe(true);
-    expect(afterCheck.betting.currentActorSeatIndex).toBeNull();
+    expect(afterCheck.street).toBe("flop");
+    expect(afterCheck.board).toHaveLength(3);
+    expect(afterCheck.players[0].currentStreetBet).toBe(0);
+    expect(afterCheck.players[1].currentStreetBet).toBe(0);
+    expect(afterCheck.players[1].hasActedThisStreet).toBe(false);
+    expect(afterCheck.betting.currentActorSeatIndex).toBe(0);
+  });
+
+  it("progresses through turn, river, showdown, and hand completion", () => {
+    const started = startHand(createSampleGameState(), { random: () => 0 });
+    const afterPreflop = applyAction(
+      applyAction(started, {
+        type: "call",
+        playerId: "hero",
+      }),
+      {
+        type: "check",
+        playerId: "bot-1",
+      }
+    );
+
+    const afterFlop = applyAction(
+      applyAction(afterPreflop, {
+        type: "check",
+        playerId: "hero",
+      }),
+      {
+        type: "check",
+        playerId: "bot-1",
+      }
+    );
+
+    const afterTurn = applyAction(
+      applyAction(afterFlop, {
+        type: "check",
+        playerId: "hero",
+      }),
+      {
+        type: "check",
+        playerId: "bot-1",
+      }
+    );
+
+    const afterRiver = applyAction(
+      applyAction(afterTurn, {
+        type: "check",
+        playerId: "hero",
+      }),
+      {
+        type: "check",
+        playerId: "bot-1",
+      }
+    );
+
+    expect(afterRiver.street).toBe("hand_complete");
+    expect(afterRiver.board).toHaveLength(5);
+    expect(afterRiver.betting.currentActorSeatIndex).toBeNull();
   });
 
   it("ends the hand when a player folds heads-up", () => {

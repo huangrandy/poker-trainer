@@ -72,6 +72,10 @@ function getEligibleActingSeatIndexes(state: GameState): SeatIndex[] {
     .sort((left, right) => left - right);
 }
 
+function getContendingPlayers(state: GameState): PlayerState[] {
+  return state.players.filter((player) => player.status !== "folded" && player.status !== "out");
+}
+
 function getNextSeatIndex(seatIndexes: SeatIndex[], currentSeatIndex: SeatIndex | null): SeatIndex | null {
   if (seatIndexes.length === 0) {
     return null;
@@ -92,6 +96,144 @@ function getNextSeatIndex(seatIndexes: SeatIndex[], currentSeatIndex: SeatIndex 
 
 function getPostBlindAmount(player: PlayerState, amount: number): number {
   return Math.min(player.stack, amount);
+}
+
+function getStreetCardCount(street: GameState["street"]): number {
+  if (street === "flop") {
+    return 3;
+  }
+
+  if (street === "turn" || street === "river") {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getNextStreet(street: GameState["street"]): GameState["street"] {
+  if (street === "not_started") {
+    return "preflop";
+  }
+
+  if (street === "preflop") {
+    return "flop";
+  }
+
+  if (street === "flop") {
+    return "turn";
+  }
+
+  if (street === "turn") {
+    return "river";
+  }
+
+  if (street === "river") {
+    return "showdown";
+  }
+
+  return "hand_complete";
+}
+
+function getPostflopFirstActorSeatIndex(state: GameState): SeatIndex | null {
+  const activeSeatIndexes = getEligibleActingSeatIndexes(state);
+
+  if (activeSeatIndexes.length === 0) {
+    return null;
+  }
+
+  const buttonSeatIndex = state.buttonSeatIndex ?? state.dealerSeatIndex;
+
+  if (buttonSeatIndex === null) {
+    return activeSeatIndexes[0];
+  }
+
+  if (activeSeatIndexes.length === 2 && activeSeatIndexes.includes(buttonSeatIndex)) {
+    return buttonSeatIndex;
+  }
+
+  return getNextSeatIndex(activeSeatIndexes, buttonSeatIndex);
+}
+
+function drawCommunityCards(state: GameState, count: number): GameState {
+  if (count === 0) {
+    return state;
+  }
+
+  const { cards, deck } = drawCards(state.deck, count);
+
+  return {
+    ...state,
+    board: [...state.board, ...cards],
+    deck,
+  };
+}
+
+function resetStreetBetting(state: GameState): void {
+  for (const player of state.players) {
+    if (player.status !== "out") {
+      player.currentStreetBet = 0;
+      player.hasActedThisStreet = false;
+    }
+  }
+
+  state.betting.currentBet = 0;
+  state.betting.minRaiseTo = state.config.blinds.bigBlind;
+  state.betting.lastAggressorSeatIndex = null;
+  state.betting.currentActorSeatIndex = null;
+}
+
+function advanceToNextStreet(state: GameState): GameState {
+  const nextState = cloneState(state);
+  const nextStreet = getNextStreet(nextState.street);
+
+  nextState.street = nextStreet;
+  resetStreetBetting(nextState);
+
+  const cardCount = getStreetCardCount(nextStreet);
+  if (cardCount > 0) {
+    const withBoard = drawCommunityCards(nextState, cardCount);
+    nextState.board = withBoard.board;
+    nextState.deck = withBoard.deck;
+  }
+
+  nextState.actionHistory = [
+    ...nextState.actionHistory,
+    createActionRecord(nextState, {
+      type: "deal_next_street",
+      playerId: null,
+    }),
+  ];
+
+  return nextState;
+}
+
+function finishHandAtShowdown(state: GameState): GameState {
+  const nextState = cloneState(state);
+  nextState.street = "showdown";
+  nextState.betting.currentActorSeatIndex = null;
+  nextState.actionHistory = [
+    ...nextState.actionHistory,
+    createActionRecord(nextState, {
+      type: "showdown",
+      playerId: null,
+    }),
+  ];
+  nextState.street = "hand_complete";
+
+  return nextState;
+}
+
+function runOutBoardAndFinishHand(state: GameState): GameState {
+  const nextState = cloneState(state);
+  const cardsNeeded = Math.max(0, 5 - nextState.board.length);
+
+  if (cardsNeeded > 0) {
+    const withBoard = drawCommunityCards(nextState, cardsNeeded);
+    nextState.board = withBoard.board;
+    nextState.deck = withBoard.deck;
+  }
+
+  return finishHandAtShowdown(nextState);
 }
 
 function postBlind(player: PlayerState, amount: number): number {
@@ -213,16 +355,28 @@ function isBettingRoundSettled(state: GameState): boolean {
 function finalizeTurn(state: GameState): GameState {
   const nextState = cloneState(state);
   const activePlayers = nextState.players.filter((player) => player.status === "active");
+  const contendingPlayers = getContendingPlayers(nextState);
 
-  if (activePlayers.length <= 1) {
+  if (contendingPlayers.length <= 1) {
     nextState.street = "hand_complete";
     nextState.betting.currentActorSeatIndex = null;
     return nextState;
   }
 
+  if (activePlayers.length === 0) {
+    return runOutBoardAndFinishHand(nextState);
+  }
+
   if (isBettingRoundSettled(nextState)) {
-    nextState.betting.currentActorSeatIndex = null;
-    return nextState;
+    const nextStreet = getNextStreet(nextState.street);
+
+    if (nextStreet === "showdown") {
+      return finishHandAtShowdown(nextState);
+    }
+
+    const advancedState = advanceToNextStreet(nextState);
+    advancedState.betting.currentActorSeatIndex = getPostflopFirstActorSeatIndex(advancedState);
+    return advancedState;
   }
 
   const eligibleSeatIndexes = getEligibleActingSeatIndexes(nextState);
