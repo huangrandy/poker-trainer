@@ -190,13 +190,14 @@ function createBoardHeaderState(): GameState {
 describe("App", () => {
   it("increments the hand count when starting a new hand", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    const { container } = render(<App />);
 
     const handLabel = screen.getByText("Hand", { exact: true });
     const handStat = handLabel.parentElement;
 
     expect(handStat).not.toBeNull();
     expect(handStat).toHaveTextContent("1");
+    expect(container.querySelector(".seat-card.is-current")).not.toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Fold" }));
 
@@ -262,6 +263,21 @@ describe("App", () => {
 
     expect(screen.getByText("Call 10")).toBeInTheDocument();
     expect(screen.getByText("Check")).toBeInTheDocument();
+  });
+
+  it("renders the legal actions in the table strip", () => {
+    const { container } = render(<App />);
+    const actionStrip = container.querySelector(".table-actions");
+
+    expect(actionStrip).not.toBeNull();
+    expect(within(actionStrip as HTMLElement).getByRole("button", { name: "Fold" })).toBeInTheDocument();
+  });
+
+  it("highlights the current actor instead of showing a footer row", () => {
+    const { container } = render(<App />);
+
+    expect(container.querySelector(".seat-card.is-current")).not.toBeNull();
+    expect(screen.queryByText("Current actor")).not.toBeInTheDocument();
   });
 
   it("does not show the board label or card counter in the community panel", () => {

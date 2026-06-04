@@ -52,17 +52,62 @@ textarea {
 }
 
 .table-layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand stats"
+    "stage stage"
+    "actions actions";
+  align-items: start;
+  gap: 20px;
   border-radius: 28px;
   padding: 24px;
   overflow: hidden;
 }
 
-.table-header {
+.table-layout__corner {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
+  min-width: 0;
+  z-index: 1;
+}
+
+.table-layout__corner--brand {
+  grid-area: brand;
+  flex-direction: column;
+  justify-self: start;
+}
+
+.table-layout__corner--stats {
+  grid-area: stats;
+  justify-self: end;
+}
+
+.table-layout__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  gap: 12px;
+}
+
+.table-layout__stats div {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.table-layout__stats span {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.table-layout__stats strong {
+  display: block;
+  margin-top: 4px;
+  color: #f8fafc;
+  font-size: 1rem;
 }
 
 .eyebrow {
@@ -73,19 +118,12 @@ textarea {
   color: #7dd3fc;
 }
 
-.table-header h1,
+.table-layout__corner--brand h1,
 .panel h2 {
   margin: 0;
   font-size: clamp(1.4rem, 2.5vw, 2rem);
 }
 
-.table-header__stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(84px, 1fr));
-  gap: 12px;
-}
-
-.table-header__stats div,
 .state-grid div {
   padding: 12px 14px;
   border-radius: 18px;
@@ -93,7 +131,6 @@ textarea {
   border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
-.table-header__stats span,
 .state-grid dt,
 .panel__header span,
 .seat-card__identity span {
@@ -102,7 +139,6 @@ textarea {
   font-size: 0.82rem;
 }
 
-.table-header__stats strong,
 .state-grid dd {
   display: block;
   margin-top: 4px;
@@ -111,6 +147,7 @@ textarea {
 }
 
 .table-stage {
+  grid-area: stage;
   position: relative;
   min-height: 760px;
   padding: 28px;
@@ -442,9 +479,34 @@ textarea {
   font-size: 1rem;
 }
 
+.table-actions {
+  grid-area: actions;
+  display: flex;
+  justify-content: center;
+}
+
+.table-actions__row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0 0;
+}
+
+.table-actions__empty {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.table-actions .primary-button {
+  margin-top: 0;
+}
+
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -541,11 +603,21 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .table-header {
-    flex-direction: column;
+  .table-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "brand"
+      "stats"
+      "stage"
+      "actions";
   }
 
-  .table-header__stats {
+  .table-layout__corner--stats {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .table-layout__stats {
     width: 100%;
   }
 
@@ -619,6 +691,10 @@ textarea {
     padding: 16px;
   }
 
+  .table-layout {
+    gap: 16px;
+  }
+
   .table-stage {
     min-height: 860px;
     padding: 20px;
@@ -633,7 +709,7 @@ textarea {
     padding: 12px;
   }
 
-  .table-header__stats,
+  .table-layout__stats,
   .state-grid {
     grid-template-columns: 1fr;
   }

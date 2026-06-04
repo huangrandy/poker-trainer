@@ -425,12 +425,13 @@ export default function App() {
   return (
     <main className="app-shell">
       <section className="table-layout">
-        <header className="table-header">
-          <div>
-            <p className="eyebrow">Poker Trainer</p>
-            <h1>Table view</h1>
-          </div>
-          <div className="table-header__stats">
+        <div className="table-layout__corner table-layout__corner--brand">
+          <p className="eyebrow">Poker Trainer</p>
+          <h1>Table view</h1>
+        </div>
+
+        <div className="table-layout__corner table-layout__corner--stats">
+          <div className="table-layout__stats">
             <div>
               <span>Hand</span>
               <strong>{gameState.handNumber}</strong>
@@ -440,7 +441,7 @@ export default function App() {
               <strong>{gameState.street}</strong>
             </div>
           </div>
-        </header>
+        </div>
 
         <div className="table-stage">
           <div className="table-stage__center">
@@ -480,12 +481,7 @@ export default function App() {
                   <span>Hand complete</span>
                   <strong>{handResult ? "Revealed" : "Waiting"}</strong>
                 </div>
-              ) : (
-                <div className="board-panel__footer">
-                  <span>Current actor</span>
-                  <strong>{currentActor ? currentActor.name : "None"}</strong>
-                </div>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -505,15 +501,9 @@ export default function App() {
             ))}
           </div>
         </div>
-      </section>
 
-      <section className="dashboard">
-        <article className="panel">
-          <div className="panel__header">
-            <h2>Legal actions</h2>
-            <span>{currentActor ? currentActor.name : "No player acting"}</span>
-          </div>
-          <div className="action-row">
+        <section className="table-actions" aria-label="Legal actions">
+          <div className="table-actions__row">
             {legalActions.length > 0 ? (
               legalActions.map((action) => (
                 <ActionButton
@@ -524,20 +514,22 @@ export default function App() {
                 />
               ))
             ) : (
-              <p className="panel__empty">{emptyActionMessage}</p>
+              <p className="table-actions__empty">{emptyActionMessage}</p>
             )}
+            {canStartNextHand ? (
+              <button className="primary-button" type="button" onClick={handleNewHand}>
+                Start new hand
+              </button>
+            ) : canRebuyHero ? (
+              <button className="primary-button" type="button" onClick={handleRebuyAndStartNewHand}>
+                Rebuy and start new hand
+              </button>
+            ) : null}
           </div>
-          {canStartNextHand ? (
-            <button className="primary-button" type="button" onClick={handleNewHand}>
-              Start new hand
-            </button>
-          ) : canRebuyHero ? (
-            <button className="primary-button" type="button" onClick={handleRebuyAndStartNewHand}>
-              Rebuy and start new hand
-            </button>
-          ) : null}
-        </article>
+        </section>
+      </section>
 
+      <section className="dashboard">
         <article className="panel">
           <div className="panel__header">
             <h2>State</h2>
