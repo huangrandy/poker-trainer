@@ -2,9 +2,11 @@
 
 ## Completed
 - Repo planning documents created.
+- Core engine, simple bots, and table UI implemented.
+- Stabilization audit completed.
 
 ## In progress
-- Poker engine not yet implemented.
+- SDD/TDD stabilization workflow is being established.
 
 ## Next
-Ask Codex to inspect docs and propose a plan for Milestone 1.
+Add regression tests for the known engine, bot, and UI-risk areas before changing implementation.

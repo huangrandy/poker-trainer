@@ -26,3 +26,10 @@ Bots return one legal action.
 ## Future AI analysis
 GameState should be serializable to JSON.
 Avoid functions, classes, Maps, Sets, or circular references inside persisted GameState.
+
+## Current stabilization rules
+
+- Specs come before implementation changes.
+- Engine, bot, and lifecycle behavior changes must be backed by failing tests first.
+- UI layout issues require manual visual acceptance criteria in addition to code review.
+- `App.tsx` currently orchestrates bootstrapping and bot advancement, so it should not be refactored casually during stabilization.

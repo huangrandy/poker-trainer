@@ -1,4 +1,4 @@
-import { drawCards, shuffleDeck } from "../../lib/poker/deck";
+import { createStandardDeck, drawCards, shuffleDeck } from "../../lib/poker/deck";
 import type {
   ActionRecord,
   GameState,
@@ -484,6 +484,76 @@ export function startHand(state: GameState, options: StartHandOptions = {}): Gam
   return dealtState;
 }
 
+export function startNextHand(state: GameState, options: StartHandOptions = {}): GameState {
+  const previousButtonSeatIndex = state.buttonSeatIndex ?? state.dealerSeatIndex;
+  const nextState = resetPlayersForNewHand({
+    ...cloneState(state),
+    handNumber: state.handNumber + 1,
+  });
+  const activeSeatIndexes = getOrderedActiveSeatIndexes(nextState);
+
+  if (activeSeatIndexes.length < 2) {
+    nextState.street = "hand_complete";
+    return nextState;
+  }
+
+  nextState.deck = shuffleDeck(createStandardDeck(), options.random);
+
+  const dealerSeatIndex =
+    previousButtonSeatIndex === null
+      ? activeSeatIndexes[0]
+      : getNextSeatIndex(activeSeatIndexes, previousButtonSeatIndex) ?? activeSeatIndexes[0];
+
+  const isHeadsUp = activeSeatIndexes.length === 2;
+  const buttonSeatIndex = dealerSeatIndex;
+  const smallBlindSeatIndex = isHeadsUp
+    ? dealerSeatIndex
+    : getNextSeatIndex(activeSeatIndexes, dealerSeatIndex);
+  const bigBlindSeatIndex = isHeadsUp
+    ? getNextSeatIndex(activeSeatIndexes, dealerSeatIndex)
+    : getNextSeatIndex(activeSeatIndexes, smallBlindSeatIndex);
+  const firstActorSeatIndex = isHeadsUp
+    ? dealerSeatIndex
+    : getNextSeatIndex(activeSeatIndexes, bigBlindSeatIndex);
+
+  if (smallBlindSeatIndex === null || bigBlindSeatIndex === null || firstActorSeatIndex === null) {
+    nextState.street = "hand_complete";
+    return nextState;
+  }
+
+  nextState.dealerSeatIndex = dealerSeatIndex;
+  nextState.buttonSeatIndex = buttonSeatIndex;
+
+  const smallBlindPlayer = getPlayerBySeatIndex(nextState, smallBlindSeatIndex);
+  const bigBlindPlayer = getPlayerBySeatIndex(nextState, bigBlindSeatIndex);
+
+  if (!smallBlindPlayer || !bigBlindPlayer) {
+    nextState.street = "hand_complete";
+    return nextState;
+  }
+
+  const smallBlindAmount = postBlind(smallBlindPlayer, nextState.config.blinds.smallBlind);
+  const bigBlindAmount = postBlind(bigBlindPlayer, nextState.config.blinds.bigBlind);
+
+  nextState.pot.mainPot += smallBlindAmount + bigBlindAmount;
+  nextState.betting.currentBet = bigBlindAmount;
+  nextState.betting.minRaiseTo = bigBlindAmount + nextState.config.blinds.bigBlind;
+  nextState.betting.lastAggressorSeatIndex = bigBlindSeatIndex;
+  nextState.betting.currentActorSeatIndex = firstActorSeatIndex;
+  nextState.street = "preflop";
+
+  const dealtState = dealHoleCards(nextState);
+  dealtState.actionHistory = [
+    ...state.actionHistory,
+    createActionRecord(dealtState, {
+      type: "start_hand",
+      playerId: null,
+    }),
+  ];
+
+  return dealtState;
+}
+
 export function getLegalActions(state: GameState, playerId: string): LegalAction[] {
   if (state.betting.currentActorSeatIndex === null) {
     return [];
@@ -586,7 +656,15 @@ export function applyAction(state: GameState, action: PlayerAction): GameState {
         throw new Error(`${action.type} requires an amount.`);
       }
 
+      const minimumAllowedAmount =
+        action.type === "bet"
+          ? state.config.blinds.bigBlind
+          : state.betting.minRaiseTo;
       const targetTotal = Math.min(action.amount, player.currentStreetBet + player.stack);
+
+      if (action.amount < minimumAllowedAmount) {
+        throw new Error(`${action.type} amount is below the legal minimum.`);
+      }
 
       if (targetTotal <= player.currentStreetBet) {
         throw new Error(`${action.type} amount must increase the current commitment.`);

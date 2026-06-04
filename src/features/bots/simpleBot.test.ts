@@ -42,4 +42,26 @@ describe("simple bot", () => {
     expect(advanced.betting.currentActorSeatIndex).toBe(0);
     expect(advanced.board).toHaveLength(3);
   });
+
+  it("stops advancing when the hero is the current actor", () => {
+    const started = startHand(createSampleGameState(), { random: () => 0 });
+
+    const advanced = advanceBotTurns(started);
+
+    expect(advanced.betting.currentActorSeatIndex).toBe(0);
+    expect(advanced.street).toBe("preflop");
+  });
+
+  it("stops advancing when the hand is complete", () => {
+    const started = startHand(createSampleGameState(), { random: () => 0 });
+    const completed = applyAction(started, {
+      type: "fold",
+      playerId: "hero",
+    });
+
+    const advanced = advanceBotTurns(completed);
+
+    expect(advanced.street).toBe("hand_complete");
+    expect(advanced.betting.currentActorSeatIndex).toBeNull();
+  });
 });
