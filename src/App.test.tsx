@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { within } from "@testing-library/dom";
 import userEvent from "@testing-library/user-event";
+import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as engine from "./features/game-engine/engine";
 import { createSampleGameState } from "./features/game-engine/fixtures";
@@ -10,6 +11,7 @@ import App from "./App";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function createBustedHeroState(startHandImpl: typeof engine.startHand): GameState {
@@ -187,7 +189,121 @@ function createBoardHeaderState(): GameState {
   };
 }
 
+function createActionCalloutState(): GameState {
+  return {
+    ...createSampleGameState(),
+    handNumber: 2,
+    street: "preflop",
+    dealerSeatIndex: 0,
+    buttonSeatIndex: 0,
+    board: [],
+    deck: createSampleGameState().deck,
+    players: createSampleGameState().players.map((player) => ({
+      ...player,
+      stack: 990,
+      currentStreetBet: 0,
+      totalCommittedThisHand: 10,
+      status: "active" as const,
+      hasActedThisStreet: true,
+      holeCards:
+        player.id === "hero"
+          ? [makeCard("A", "clubs"), makeCard("K", "diamonds")]
+          : [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+    })),
+    betting: {
+      currentBet: 0,
+      minRaiseTo: 10,
+      lastAggressorSeatIndex: null,
+      currentActorSeatIndex: null,
+    },
+    pot: {
+      mainPot: 10,
+      sidePots: [],
+    },
+    actionHistory: [
+      {
+        id: "2:1",
+        type: "call",
+        playerId: "hero",
+        amount: 10,
+        street: "preflop",
+        handNumber: 2,
+        timestampMs: 1,
+      },
+    ],
+    lastHandResult: null,
+  };
+}
+
+function createBotDelayState(): GameState {
+  return {
+    ...createSampleGameState(),
+    handNumber: 2,
+    street: "preflop",
+    dealerSeatIndex: 0,
+    buttonSeatIndex: 0,
+    board: [],
+    deck: createSampleGameState().deck,
+    players: createSampleGameState().players.map((player) => ({
+      ...player,
+      stack: 990,
+      currentStreetBet: 0,
+      totalCommittedThisHand: 10,
+      status: "active" as const,
+      hasActedThisStreet: true,
+      holeCards:
+        player.id === "hero"
+          ? [makeCard("A", "clubs"), makeCard("K", "diamonds")]
+          : [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+    })),
+    betting: {
+      currentBet: 0,
+      minRaiseTo: 10,
+      lastAggressorSeatIndex: null,
+      currentActorSeatIndex: 1,
+    },
+    pot: {
+      mainPot: 10,
+      sidePots: [],
+    },
+    actionHistory: [],
+    lastHandResult: null,
+  };
+}
+
+function createStreetRevealState(startHandImpl: typeof engine.startHand): GameState {
+  const started = startHandImpl(createSampleGameState(), { random: () => 0 });
+  const afterHeroCall = engine.applyAction(started, {
+    type: "call",
+    playerId: "hero",
+  });
+
+  return engine.applyAction(afterHeroCall, {
+    type: "check",
+    playerId: "bot-1",
+  });
+}
+
 describe("App", () => {
+  it("keeps the center board height fixed as the board changes", () => {
+    const emptyRender = render(<App />);
+    const emptyBoardPanel = emptyRender.container.querySelector(".board-panel");
+
+    expect(emptyBoardPanel).not.toBeNull();
+
+    const emptyHeight = window.getComputedStyle(emptyBoardPanel as HTMLElement).height;
+    emptyRender.unmount();
+
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createStreetRevealState(realStartHand));
+    const filledRender = render(<App />);
+    const filledBoardPanel = filledRender.container.querySelector(".board-panel");
+
+    expect(filledBoardPanel).not.toBeNull();
+    expect(window.getComputedStyle(filledBoardPanel as HTMLElement).height).toBe(emptyHeight);
+    filledRender.unmount();
+  });
+
   it("increments the hand count when starting a new hand", async () => {
     const user = userEvent.setup();
     const { container } = render(<App />);
@@ -261,8 +377,61 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(screen.getByText("Call 10")).toBeInTheDocument();
+    expect(screen.getByText("Call $10")).toBeInTheDocument();
     expect(screen.getByText("Check")).toBeInTheDocument();
+  });
+
+  it("renders the latest action callout on the table", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createActionCalloutState());
+
+    const { container } = render(<App />);
+    const callout = container.querySelector(".table-stage__action-callout");
+
+    expect(callout).not.toBeNull();
+    expect(within(callout as HTMLElement).getByText("Hero called $10")).toBeInTheDocument();
+  });
+
+  it("advances bot turns after a delay instead of instantly", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(engine, "startHand").mockImplementation(() => createBotDelayState());
+
+    render(<App />);
+
+    expect(screen.getByText("Bot 1")).toBeInTheDocument();
+    expect(screen.getByText("Bot 1").closest(".seat-card")).toHaveClass("is-current");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(499);
+    });
+    expect(screen.getByText("Bot 1").closest(".seat-card")).toHaveClass("is-current");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(screen.getByText("Hero").closest(".seat-card")).toHaveClass("is-current");
+  });
+
+  it("flips community cards in before revealing the next street", async () => {
+    vi.useFakeTimers();
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createStreetRevealState(realStartHand));
+
+    const { container } = render(<App />);
+    const boardCards = container.querySelectorAll(".board-panel__cards .table-card");
+
+    expect(boardCards.length).toBeGreaterThan(0);
+    boardCards.forEach((card) => {
+      expect(card).toHaveClass("table-card--face-down");
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+
+    container.querySelectorAll(".board-panel__cards .table-card").forEach((card) => {
+      expect(card).not.toHaveClass("table-card--face-down");
+    });
   });
 
   it("renders the legal actions in the table strip", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { advanceBotTurns } from "./features/bots";
 import {
   applyAction,
@@ -53,6 +53,9 @@ function getSuitTone(suit: string): string {
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
 
+const BOT_ACTION_DELAY_MS = 500;
+const STREET_REVEAL_DELAY_MS = 450;
+
 function getSeatActionPlacement(positionClass: string): SeatActionPlacement {
   if (positionClass === "seat-top") {
     return "bottom";
@@ -83,19 +86,19 @@ function describeVisibleAction(record: GameState["actionHistory"][number]): stri
   }
 
   if (record.type === "call" && record.amount !== undefined) {
-    return `Call ${record.amount}`;
+    return `Call $${record.amount}`;
   }
 
   if (record.type === "bet" && record.amount !== undefined) {
-    return `Bet ${record.amount}`;
+    return `Bet $${record.amount}`;
   }
 
   if (record.type === "raise" && record.amount !== undefined) {
-    return `Raise ${record.amount}`;
+    return `Raise $${record.amount}`;
   }
 
   if (record.type === "all_in" && record.amount !== undefined) {
-    return `All in ${record.amount}`;
+    return `All in $${record.amount}`;
   }
 
   return null;
@@ -124,15 +127,15 @@ function getSeatPosition(index: number, total: number): string {
 
 function getLegalActionLabel(action: LegalAction): string {
   if (action.type === "call" && action.callAmount !== undefined) {
-    return `Call ${action.callAmount}`;
+    return `Call $${action.callAmount}`;
   }
 
   if ((action.type === "bet" || action.type === "raise") && action.minAmount !== undefined) {
-    return `${action.type === "bet" ? "Bet" : "Raise"} ${action.minAmount}`;
+    return `${action.type === "bet" ? "Bet" : "Raise"} $${action.minAmount}`;
   }
 
   if (action.type === "all_in" && action.maxAmount !== undefined) {
-    return `All in ${action.maxAmount}`;
+    return `All in $${action.maxAmount}`;
   }
 
   return action.type[0].toUpperCase() + action.type.slice(1);
@@ -147,11 +150,13 @@ function TableCard({
   suit,
   isHighlighted = false,
   isMuted = false,
+  isFaceDown = false,
 }: {
   rank: string;
   suit: string;
   isHighlighted?: boolean;
   isMuted?: boolean;
+  isFaceDown?: boolean;
 }) {
   return (
     <span
@@ -159,14 +164,21 @@ function TableCard({
       className={[
         "table-card",
         `table-card--${getSuitTone(suit)}`,
+        isFaceDown ? "table-card--face-down" : "",
         isHighlighted ? "table-card--highlighted" : "",
         isMuted ? "table-card--muted" : "",
       ]
         .filter(Boolean)
         .join(" ")}
+      data-face-down={isFaceDown ? "true" : "false"}
     >
-      <span className="table-card__rank">{rank}</span>
-      <span className="table-card__suit">{getSuitSymbol(suit)}</span>
+      <span className="table-card__inner">
+        <span className="table-card__face table-card__face--front">
+          <span className="table-card__rank">{rank}</span>
+          <span className="table-card__suit">{getSuitSymbol(suit)}</span>
+        </span>
+        <span className="table-card__face table-card__face--back" aria-hidden="true" />
+      </span>
     </span>
   );
 }
@@ -237,15 +249,23 @@ function describeAction(record: GameState["actionHistory"][number], state: GameS
       : state.players.find((player) => player.id === record.playerId)?.name ?? record.playerId;
 
   if (record.type === "call" && record.amount !== undefined) {
-    return `${actor} called ${record.amount}`;
+    return `${actor} called $${record.amount}`;
+  }
+
+  if (record.type === "check") {
+    return `${actor} checked`;
+  }
+
+  if (record.type === "fold") {
+    return `${actor} folded`;
   }
 
   if ((record.type === "bet" || record.type === "raise") && record.amount !== undefined) {
-    return `${actor} ${record.type} to ${record.amount}`;
+    return `${actor} ${record.type === "bet" ? "bet" : "raised"} to $${record.amount}`;
   }
 
   if (record.type === "all_in" && record.amount !== undefined) {
-    return `${actor} went all in for ${record.amount}`;
+    return `${actor} went all in for $${record.amount}`;
   }
 
   if (record.type === "start_hand") {
@@ -291,27 +311,50 @@ function ActionButton({
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>(() => createInitialGameState());
-
-  useEffect(() => {
-    const currentActor = gameState.betting.currentActorSeatIndex;
-
-    if (currentActor === null) {
-      return;
-    }
-
-    const currentPlayer = gameState.players.find((player) => player.seatIndex === currentActor);
-
-    if (!currentPlayer?.isBot) {
-      return;
-    }
-
-    setGameState((previous) => advanceBotTurns(previous));
-  }, [gameState]);
+  const [streetReveal, setStreetReveal] = useState({
+    active: false,
+    fromIndex: 0,
+  });
+  const botTimerRef = useRef<number | null>(null);
+  const revealTimerRef = useRef<number | null>(null);
+  const lastHandledDealIdRef = useRef<string | null>(null);
+  const lastFullyRevealedBoardLengthRef = useRef(0);
 
   const currentActor = useMemo(
     () => gameState.players.find((player) => player.seatIndex === gameState.betting.currentActorSeatIndex) ?? null,
     [gameState.betting.currentActorSeatIndex, gameState.players]
   );
+
+  const latestStreetDealRecord = useMemo(() => {
+    for (let index = gameState.actionHistory.length - 1; index >= 0; index -= 1) {
+      const record = gameState.actionHistory[index];
+
+      if (
+        record.handNumber === gameState.handNumber &&
+        record.street === gameState.street &&
+        record.type === "deal_next_street"
+      ) {
+        return record;
+      }
+    }
+
+    return null;
+  }, [gameState.actionHistory, gameState.handNumber, gameState.street]);
+
+  const latestPlayerActionRecord = useMemo(() => {
+    for (let index = gameState.actionHistory.length - 1; index >= 0; index -= 1) {
+      const record = gameState.actionHistory[index];
+
+      if (
+        record.handNumber === gameState.handNumber &&
+        record.playerId !== null
+      ) {
+        return record;
+      }
+    }
+
+    return null;
+  }, [gameState.actionHistory, gameState.handNumber, gameState.street]);
 
   const legalActions = useMemo(() => {
     if (!currentActor) {
@@ -371,6 +414,78 @@ export default function App() {
     return keys;
   }, [handResult]);
 
+  useLayoutEffect(() => {
+    if (latestStreetDealRecord === null) {
+      lastHandledDealIdRef.current = null;
+      lastFullyRevealedBoardLengthRef.current = gameState.board.length;
+
+      setStreetReveal((previous) =>
+        previous.active || previous.fromIndex !== gameState.board.length
+          ? { active: false, fromIndex: gameState.board.length }
+          : previous
+      );
+
+      return;
+    }
+
+    if (lastHandledDealIdRef.current === latestStreetDealRecord.id) {
+      return;
+    }
+
+    lastHandledDealIdRef.current = latestStreetDealRecord.id;
+
+    if (revealTimerRef.current !== null) {
+      window.clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+
+    const fromIndex = lastFullyRevealedBoardLengthRef.current;
+
+    setStreetReveal({
+      active: true,
+      fromIndex,
+    });
+
+    revealTimerRef.current = window.setTimeout(() => {
+      lastFullyRevealedBoardLengthRef.current = gameState.board.length;
+      setStreetReveal({
+        active: false,
+        fromIndex: gameState.board.length,
+      });
+      revealTimerRef.current = null;
+    }, STREET_REVEAL_DELAY_MS);
+
+    return () => {
+      if (revealTimerRef.current !== null) {
+        window.clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+    };
+  }, [gameState.board.length, latestStreetDealRecord, gameState.handNumber, gameState.street]);
+
+  useEffect(() => {
+    if (botTimerRef.current !== null) {
+      window.clearTimeout(botTimerRef.current);
+      botTimerRef.current = null;
+    }
+
+    if (streetReveal.active || currentActor === null || !currentActor.isBot) {
+      return;
+    }
+
+    botTimerRef.current = window.setTimeout(() => {
+      setGameState((previous) => advanceBotTurns(previous, { maxSteps: 1 }));
+      botTimerRef.current = null;
+    }, BOT_ACTION_DELAY_MS);
+
+    return () => {
+      if (botTimerRef.current !== null) {
+        window.clearTimeout(botTimerRef.current);
+        botTimerRef.current = null;
+      }
+    };
+  }, [currentActor, streetReveal.active, gameState.handNumber, gameState.street]);
+
   const restartablePlayers = gameState.players.filter(
     (player) => player.status !== "out" && player.stack > 0
   );
@@ -392,7 +507,7 @@ export default function App() {
   function handleAction(action: PlayerAction) {
     setGameState((previous) => {
       const nextState = applyAction(previous, action);
-      return advanceBotTurns(nextState);
+      return nextState;
     });
   }
 
@@ -421,6 +536,9 @@ export default function App() {
   }
 
   const activePlayers = gameState.players.filter((player) => player.status !== "out");
+  const latestActionLabel = latestPlayerActionRecord
+    ? describeAction(latestPlayerActionRecord, gameState)
+    : null;
 
   return (
     <main className="app-shell">
@@ -470,6 +588,7 @@ export default function App() {
                       suit={card.suit}
                       isHighlighted={isHandComplete && highlightedCardKeys.has(getCardKey(card))}
                       isMuted={isHandComplete && !highlightedCardKeys.has(getCardKey(card))}
+                      isFaceDown={streetReveal.active && index >= streetReveal.fromIndex}
                     />
                   ))
                 ) : (
@@ -484,6 +603,12 @@ export default function App() {
               ) : null}
             </div>
           </div>
+
+          {latestActionLabel ? (
+            <div className="table-stage__action-callout" key={latestPlayerActionRecord?.id}>
+              {latestActionLabel}
+            </div>
+          ) : null}
 
           <div className="seat-layer">
             {activePlayers.map((player, index) => (
