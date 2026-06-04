@@ -54,7 +54,7 @@ function getSuitTone(suit: string): string {
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
 
-const BOT_ACTION_DELAY_MS = 500;
+const BOT_ACTION_DELAY_MS = 1000;
 const STREET_REVEAL_DELAY_MS = 450;
 
 function getSeatActionPlacement(positionClass: string): SeatActionPlacement {
