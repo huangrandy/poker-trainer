@@ -1,0 +1,20 @@
+prefix_rule(
+    pattern = ["git", "add"],
+    decision = "allow",
+    justification = "Allow staging changes automatically without prompting",
+    match = [
+        "git add .",
+        "git add -A",
+        "git add --all"
+    ]
+)
+
+prefix_rule(
+    pattern = ["git", "commit"],
+    decision = "allow",
+    justification = "Allow committing changes automatically without prompting",
+    match = [
+        "git commit -m",
+        "git commit --amend"
+    ]
+)
