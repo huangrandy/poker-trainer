@@ -15,6 +15,25 @@ function formatCardLabel(rank: string, suit: string): string {
   return `${rank}${suitSymbols[suit] ?? suit}`;
 }
 
+function getSuitSymbol(suit: string): string {
+  const suitSymbols: Record<string, string> = {
+    clubs: "♣",
+    diamonds: "♦",
+    hearts: "♥",
+    spades: "♠",
+  };
+
+  return suitSymbols[suit] ?? suit;
+}
+
+function getSuitTone(suit: string): string {
+  if (suit === "diamonds" || suit === "hearts") {
+    return "red";
+  }
+
+  return "black";
+}
+
 function formatPlayerStatus(player: PlayerState): string {
   if (player.status === "all_in") {
     return "All-in";
@@ -73,7 +92,12 @@ function createInitialGameState(): GameState {
 }
 
 function TableCard({ rank, suit }: { rank: string; suit: string }) {
-  return <span className="table-card">{formatCardLabel(rank, suit)}</span>;
+  return (
+    <span className={`table-card table-card--${getSuitTone(suit)}`}>
+      <span className="table-card__rank">{rank}</span>
+      <span className="table-card__suit">{getSuitSymbol(suit)}</span>
+    </span>
+  );
 }
 
 function SeatCard({
@@ -106,6 +130,39 @@ function SeatCard({
       </div>
     </article>
   );
+}
+
+function describeAction(record: GameState["actionHistory"][number], state: GameState): string {
+  const actor =
+    record.playerId === null
+      ? "System"
+      : state.players.find((player) => player.id === record.playerId)?.name ?? record.playerId;
+
+  if (record.type === "call" && record.amount !== undefined) {
+    return `${actor} called ${record.amount}`;
+  }
+
+  if ((record.type === "bet" || record.type === "raise") && record.amount !== undefined) {
+    return `${actor} ${record.type} to ${record.amount}`;
+  }
+
+  if (record.type === "all_in" && record.amount !== undefined) {
+    return `${actor} went all in for ${record.amount}`;
+  }
+
+  if (record.type === "start_hand") {
+    return `${actor} started the hand`;
+  }
+
+  if (record.type === "deal_next_street") {
+    return `${actor} dealt the next street`;
+  }
+
+  if (record.type === "showdown") {
+    return `${actor} triggered showdown`;
+  }
+
+  return `${actor} ${record.type}`;
 }
 
 function ActionButton({
@@ -313,7 +370,7 @@ export default function App() {
             {gameState.actionHistory.length > 0 ? (
               gameState.actionHistory.slice().reverse().map((record) => (
                 <li key={record.id}>
-                  <strong>{record.type}</strong>
+                  <strong>{describeAction(record, gameState)}</strong>
                   <span>Hand {record.handNumber}</span>
                   <span>{record.street}</span>
                 </li>

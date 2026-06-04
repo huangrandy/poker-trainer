@@ -115,7 +115,11 @@ textarea {
 
 .table-stage {
   position: relative;
-  min-height: 640px;
+  min-height: 760px;
+  padding: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 28px;
   background:
     radial-gradient(circle at center, rgba(34, 197, 94, 0.16), transparent 42%),
@@ -127,7 +131,7 @@ textarea {
 .table-stage::before {
   content: "";
   position: absolute;
-  inset: 18%;
+  inset: 16%;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.15);
   box-shadow: inset 0 0 0 16px rgba(6, 12, 24, 0.25);
@@ -136,9 +140,9 @@ textarea {
 }
 
 .table-stage__center {
-  position: absolute;
-  inset: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
+  inset: auto;
+  transform: none;
   z-index: 1;
   width: min(460px, 80vw);
 }
@@ -177,14 +181,36 @@ textarea {
   min-width: 56px;
   min-height: 76px;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   border-radius: 16px;
   background: linear-gradient(180deg, #f8fafc, #cbd5e1);
-  color: #0f172a;
   font-weight: 700;
   letter-spacing: 0.02em;
   box-shadow: 0 14px 24px rgba(15, 23, 42, 0.28);
+}
+
+.table-card--black {
+  color: #0f172a;
+}
+
+.table-card--red {
+  color: #b91c1c;
+}
+
+.table-card__rank,
+.table-card__suit {
+  line-height: 1;
+}
+
+.table-card__rank {
+  font-size: 1.2rem;
+}
+
+.table-card__suit {
+  margin-top: 4px;
+  font-size: 1rem;
 }
 
 .seat-layer {
@@ -229,7 +255,7 @@ textarea {
 }
 
 .seat-top {
-  top: 6%;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
 }
@@ -245,7 +271,7 @@ textarea {
 }
 
 .seat-bottom {
-  bottom: 4%;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
 }
@@ -390,11 +416,12 @@ textarea {
   }
 
   .table-stage {
-    min-height: 520px;
+    min-height: 700px;
+    padding: 20px;
   }
 
   .table-stage::before {
-    inset: 12%;
+    inset: 10%;
   }
 
   .seat-card {
@@ -404,6 +431,14 @@ textarea {
   .table-header__stats,
   .state-grid {
     grid-template-columns: 1fr;
+  }
+
+  .seat-top {
+    top: 16px;
+  }
+
+  .seat-bottom {
+    bottom: 16px;
   }
 
   .seat-top-right,
