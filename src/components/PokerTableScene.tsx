@@ -303,6 +303,7 @@ export function PokerTableScene({
       }}
     >
       <div
+        className=""
         style={{
           position: "relative",
           width: boardWidth,
