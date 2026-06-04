@@ -176,6 +176,17 @@ function createActionChipState(): GameState {
   };
 }
 
+function createBoardHeaderState(): GameState {
+  return {
+    ...createActionChipState(),
+    board: [
+      makeCard("9", "diamonds"),
+      makeCard("8", "clubs"),
+      makeCard("A", "hearts"),
+    ],
+  };
+}
+
 describe("App", () => {
   it("increments the hand count when starting a new hand", async () => {
     const user = userEvent.setup();
@@ -251,5 +262,14 @@ describe("App", () => {
 
     expect(screen.getByText("Call 10")).toBeInTheDocument();
     expect(screen.getByText("Check")).toBeInTheDocument();
+  });
+
+  it("does not show the board label or card counter in the community panel", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createBoardHeaderState());
+
+    render(<App />);
+
+    expect(screen.queryByText("Board")).not.toBeInTheDocument();
+    expect(screen.queryByText("3/5")).not.toBeInTheDocument();
   });
 });

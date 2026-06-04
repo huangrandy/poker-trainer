@@ -420,7 +420,6 @@ export default function App() {
     });
   }
 
-  const boardLabel = gameState.board.length === 0 ? "No board yet" : "Board";
   const activePlayers = gameState.players.filter((player) => player.status !== "out");
 
   return (
@@ -446,10 +445,6 @@ export default function App() {
         <div className="table-stage">
           <div className="table-stage__center">
             <div className="board-panel">
-              <div className="board-panel__row">
-                <span>{boardLabel}</span>
-                <strong>{gameState.board.length}/5</strong>
-              </div>
               <div className="board-panel__pot">
                 <span className="board-panel__pot-label">{centerPotLabel}</span>
                 <strong>{centerPotAmount}</strong>

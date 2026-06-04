@@ -95,7 +95,6 @@ textarea {
 
 .table-header__stats span,
 .state-grid dt,
-.board-panel__row span,
 .panel__header span,
 .seat-card__identity span {
   display: block;
@@ -104,8 +103,7 @@ textarea {
 }
 
 .table-header__stats strong,
-.state-grid dd,
-.board-panel__row strong {
+.state-grid dd {
   display: block;
   margin-top: 4px;
   color: #f8fafc;
@@ -153,13 +151,6 @@ textarea {
   background: rgba(7, 17, 31, 0.86);
   border: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: 0 20px 50px rgba(2, 6, 23, 0.36);
-}
-
-.board-panel__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
 }
 
 .board-panel__cards {
@@ -563,6 +554,60 @@ textarea {
   }
 }
 
+@media (max-width: 1440px) {
+  .table-stage {
+    min-height: 980px;
+    padding: 28px 20px 34px;
+    align-items: stretch;
+  }
+
+  .table-stage::before {
+    inset: 8% 16%;
+    border-radius: 999px / 46%;
+  }
+
+  .table-stage__center {
+    width: min(540px, 68vw);
+    margin: auto 0;
+  }
+
+  .seat-card {
+    width: min(220px, 22vw);
+  }
+
+  .seat-top {
+    top: 5%;
+  }
+
+  .seat-top-right {
+    top: 18%;
+    right: 2%;
+  }
+
+  .seat-bottom-right {
+    bottom: 12%;
+    right: 2%;
+  }
+
+  .seat-bottom {
+    bottom: 5%;
+  }
+
+  .seat-bottom-left {
+    bottom: 12%;
+    left: 2%;
+  }
+
+  .seat-top-left {
+    top: 18%;
+    left: 2%;
+  }
+
+  .board-panel__cards {
+    padding-top: 86px;
+  }
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding: 14px;
@@ -575,12 +620,12 @@ textarea {
   }
 
   .table-stage {
-    min-height: 700px;
+    min-height: 860px;
     padding: 20px;
   }
 
   .table-stage::before {
-    inset: 10%;
+    inset: 10% 10%;
   }
 
   .seat-card {
@@ -594,35 +639,31 @@ textarea {
   }
 
   .seat-top {
-    top: 14%;
+    top: 10%;
   }
 
   .seat-bottom {
-    bottom: 10%;
+    bottom: 7%;
   }
 
   .seat-top-right {
-    top: 18%;
+    top: 12%;
     right: 2%;
   }
 
   .seat-bottom-right {
-    bottom: 10%;
+    bottom: 7%;
     right: 2%;
   }
 
   .seat-top-left {
-    top: 18%;
+    top: 12%;
     left: 2%;
   }
 
   .seat-bottom-left {
-    bottom: 10%;
+    bottom: 7%;
     left: 2%;
-  }
-
-  .board-panel__cards {
-    padding-top: 84px;
   }
 
   .board-panel__pot {
