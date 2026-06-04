@@ -51,20 +51,54 @@ function getSuitTone(suit: string): string {
   return "black";
 }
 
-function formatPlayerStatus(player: PlayerState): string {
-  if (player.status === "all_in") {
-    return "All-in";
+type SeatActionPlacement = "top" | "bottom" | "left" | "right";
+
+function getSeatActionPlacement(positionClass: string): SeatActionPlacement {
+  if (positionClass === "seat-top") {
+    return "bottom";
   }
 
-  if (player.status === "folded") {
-    return "Folded";
+  if (positionClass === "seat-bottom") {
+    return "top";
   }
 
-  if (player.status === "out") {
-    return "Sitting out";
+  if (positionClass === "seat-top-left" || positionClass === "seat-bottom-left") {
+    return "right";
   }
 
-  return player.isBot ? "Bot" : "Hero";
+  return "left";
+}
+
+function describeVisibleAction(record: GameState["actionHistory"][number]): string | null {
+  if (record.playerId === null) {
+    return null;
+  }
+
+  if (record.type === "check") {
+    return "Check";
+  }
+
+  if (record.type === "fold") {
+    return "Fold";
+  }
+
+  if (record.type === "call" && record.amount !== undefined) {
+    return `Call ${record.amount}`;
+  }
+
+  if (record.type === "bet" && record.amount !== undefined) {
+    return `Bet ${record.amount}`;
+  }
+
+  if (record.type === "raise" && record.amount !== undefined) {
+    return `Raise ${record.amount}`;
+  }
+
+  if (record.type === "all_in" && record.amount !== undefined) {
+    return `All in ${record.amount}`;
+  }
+
+  return null;
 }
 
 function getSeatPosition(index: number, total: number): string {
@@ -141,6 +175,8 @@ function SeatCard({
   player,
   isCurrentActor,
   positionClass,
+  actionLabel,
+  actionPlacement,
   revealResult,
   highlightedCardKeys,
   isHandComplete,
@@ -148,6 +184,8 @@ function SeatCard({
   player: PlayerState;
   isCurrentActor: boolean;
   positionClass: string;
+  actionLabel: string | null;
+  actionPlacement: SeatActionPlacement;
   revealResult: HandRevealPlayerResult | null;
   highlightedCardKeys: Set<string>;
   isHandComplete: boolean;
@@ -165,13 +203,12 @@ function SeatCard({
 
   return (
     <article className={seatClasses}>
-      <div className="seat-card__header">
+      {actionLabel ? (
+        <div className={`seat-card__action seat-card__action--${actionPlacement}`}>{actionLabel}</div>
+      ) : null}
+      <div className="seat-card__identity">
         <strong>{player.name}</strong>
-        <span>{formatPlayerStatus(player)}</span>
-      </div>
-      <div className="seat-card__meta">
         <span>Stack {player.stack}</span>
-        <span>Bet {player.currentStreetBet}</span>
       </div>
       {revealResult ? <div className="seat-card__result">{revealResult.handLabel}</div> : null}
       <div className="seat-card__cards">
@@ -286,6 +323,8 @@ export default function App() {
 
   const handResult = gameState.lastHandResult;
   const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
+  const centerPotLabel = isHandComplete ? "Pot awarded" : "Pot";
+  const centerPotAmount = handResult?.potAwarded ?? gameState.pot.mainPot;
   const handResultByPlayerId = useMemo(
     () =>
       new Map(
@@ -293,6 +332,29 @@ export default function App() {
       ),
     [handResult]
   );
+  const visibleActionByPlayerId = useMemo(() => {
+    const latestActions = new Map<string, string>();
+
+    for (const record of gameState.actionHistory) {
+      if (record.playerId === null) {
+        continue;
+      }
+
+      if (record.handNumber !== gameState.handNumber || record.street !== gameState.street) {
+        continue;
+      }
+
+      const label = describeVisibleAction(record);
+
+      if (!label) {
+        continue;
+      }
+
+      latestActions.set(record.playerId, label);
+    }
+
+    return latestActions;
+  }, [gameState.actionHistory, gameState.handNumber, gameState.street]);
   const highlightedCardKeys = useMemo(() => {
     const keys = new Set<string>();
 
@@ -378,10 +440,6 @@ export default function App() {
               <span>Street</span>
               <strong>{gameState.street}</strong>
             </div>
-            <div>
-              <span>Pot</span>
-              <strong>{gameState.pot.mainPot}</strong>
-            </div>
           </div>
         </header>
 
@@ -391,6 +449,21 @@ export default function App() {
               <div className="board-panel__row">
                 <span>{boardLabel}</span>
                 <strong>{gameState.board.length}/5</strong>
+              </div>
+              <div className="board-panel__pot">
+                <span className="board-panel__pot-label">{centerPotLabel}</span>
+                <strong>{centerPotAmount}</strong>
+                <button
+                  className="board-panel__pot-tooltip"
+                  type="button"
+                  aria-label={`Current street bet ${gameState.betting.currentBet}`}
+                  title={`Current street bet ${gameState.betting.currentBet}`}
+                >
+                  i
+                  <span className="board-panel__pot-tooltip-content">
+                    Current street bet {gameState.betting.currentBet}
+                  </span>
+                </button>
               </div>
               <div className="board-panel__cards">
                 {gameState.board.length > 0 ? (
@@ -407,29 +480,13 @@ export default function App() {
                   <span className="board-panel__empty">Community cards will appear here</span>
                 )}
               </div>
-              {isHandComplete && handResult ? (
-                <div className="hand-reveal">
-                  <div className="hand-reveal__pot">
-                    <span>Pot awarded</span>
-                    <strong>{handResult.potAwarded}</strong>
-                  </div>
-                  <ul className="hand-reveal__players">
-                    {handResult.playerResults.map((result) => (
-                      <li
-                        key={result.playerId}
-                        className={result.isWinner ? "is-winner" : "is-loser"}
-                      >
-                        <div className="hand-reveal__player-name">
-                          <strong>{result.name}</strong>
-                          {result.isWinner ? <span>Winner</span> : <span>Lost</span>}
-                        </div>
-                        <span>{result.handLabel}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {isHandComplete ? (
+                <div className="board-panel__footer">
+                  <span>Hand complete</span>
+                  <strong>{handResult ? "Revealed" : "Waiting"}</strong>
                 </div>
               ) : (
-                <div className="board-panel__row">
+                <div className="board-panel__footer">
                   <span>Current actor</span>
                   <strong>{currentActor ? currentActor.name : "None"}</strong>
                 </div>
@@ -444,6 +501,8 @@ export default function App() {
                 player={player}
                 isCurrentActor={player.id === currentActor?.id}
                 positionClass={getSeatPosition(index, activePlayers.length)}
+                actionLabel={visibleActionByPlayerId.get(player.id) ?? null}
+                actionPlacement={getSeatActionPlacement(getSeatPosition(index, activePlayers.length))}
                 revealResult={handResultByPlayerId.get(player.id) ?? null}
                 highlightedCardKeys={highlightedCardKeys}
                 isHandComplete={isHandComplete}

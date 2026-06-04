@@ -111,6 +111,71 @@ function createShowdownRevealState(): GameState {
   });
 }
 
+function createActionChipState(): GameState {
+  return {
+    ...createSampleGameState(),
+    handNumber: 2,
+    street: "preflop",
+    dealerSeatIndex: 0,
+    buttonSeatIndex: 0,
+    board: [],
+    deck: createSampleGameState().deck,
+    players: createSampleGameState().players.map((player) => {
+      if (player.id === "hero") {
+        return {
+          ...player,
+          stack: 990,
+          holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 10,
+          totalCommittedThisHand: 10,
+          status: "active" as const,
+          hasActedThisStreet: true,
+        };
+      }
+
+      return {
+        ...player,
+        stack: 990,
+        holeCards: [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+        currentStreetBet: 10,
+        totalCommittedThisHand: 10,
+        status: "active" as const,
+        hasActedThisStreet: true,
+      };
+    }),
+    betting: {
+      currentBet: 10,
+      minRaiseTo: 20,
+      lastAggressorSeatIndex: 1,
+      currentActorSeatIndex: null,
+    },
+    pot: {
+      mainPot: 20,
+      sidePots: [],
+    },
+    actionHistory: [
+      {
+        id: "2:1",
+        type: "call",
+        playerId: "hero",
+        amount: 10,
+        street: "preflop",
+        handNumber: 2,
+        timestampMs: 1,
+      },
+      {
+        id: "2:2",
+        type: "check",
+        playerId: "bot-1",
+        street: "preflop",
+        handNumber: 2,
+        timestampMs: 2,
+      },
+    ],
+    lastHandResult: null,
+  };
+}
+
 describe("App", () => {
   it("increments the hand count when starting a new hand", async () => {
     const user = userEvent.setup();
@@ -158,15 +223,16 @@ describe("App", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
 
     const { container } = render(<App />);
-    const handReveal = container.querySelector(".hand-reveal");
+    const potPill = container.querySelector(".board-panel__pot");
 
-    expect(screen.getByText("Pot awarded")).toBeInTheDocument();
-    expect(screen.getByText("25")).toBeInTheDocument();
-    expect(handReveal).not.toBeNull();
-    const reveal = within(handReveal as HTMLElement);
-    expect(reveal.getByText("Hero")).toBeInTheDocument();
-    expect(reveal.getByText("Bot 1")).toBeInTheDocument();
-    expect(reveal.getByText("Straight, 6 high")).toBeInTheDocument();
+    expect(potPill).not.toBeNull();
+    expect(within(potPill as HTMLElement).getByText("Pot awarded")).toBeInTheDocument();
+    expect(within(potPill as HTMLElement).getByText("25")).toBeInTheDocument();
+    expect(container.querySelector(".hand-reveal__players")).not.toBeInTheDocument();
+
+    const winnerSeat = container.querySelector(".seat-card--winner");
+    expect(winnerSeat).not.toBeNull();
+    expect(within(winnerSeat as HTMLElement).getByText("Straight, 6 high")).toBeInTheDocument();
 
     const heroWinningCard = screen.getByText("6", { selector: ".table-card__rank" }).closest(".table-card");
     expect(heroWinningCard).toHaveClass("table-card--highlighted");
@@ -176,6 +242,14 @@ describe("App", () => {
 
     const botCards = screen.getAllByText("K", { selector: ".table-card__rank" });
     expect(botCards[0].closest(".table-card")).toHaveClass("table-card--muted");
-    expect(container.querySelector(".hand-reveal")).toBeInTheDocument();
+  });
+
+  it("shows recent seat action chips on the table", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
+
+    render(<App />);
+
+    expect(screen.getByText("Call 10")).toBeInTheDocument();
+    expect(screen.getByText("Check")).toBeInTheDocument();
   });
 });
