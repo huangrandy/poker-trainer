@@ -63,7 +63,7 @@ textarea {
   gap: 20px;
   border-radius: 28px;
   padding: 24px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .table-layout__corner {
@@ -149,11 +149,11 @@ textarea {
 .table-stage {
   grid-area: stage;
   position: relative;
-  height: auto;
-  min-height: 0;
-  padding: 0;
+  height: clamp(860px, 74vh, 980px);
+  min-height: 860px;
+  padding: 32px 0 16px;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   border-radius: 0;
   background: transparent;
@@ -694,14 +694,17 @@ textarea {
   }
 
   .table-stage {
-    height: auto;
+    height: clamp(760px, 68vh, 880px);
+    min-height: 760px;
+    padding-top: 24px;
   }
 }
 
 @media (max-width: 1440px) {
   .table-stage {
-    height: auto;
-    padding: 0;
+    height: clamp(780px, 70vh, 920px);
+    min-height: 780px;
+    padding-top: 20px;
     align-items: center;
   }
 

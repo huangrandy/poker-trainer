@@ -1,7 +1,7 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   Card,
   HandRevealPlayerResult,
@@ -116,13 +116,19 @@ const seatLocalRects = {
   },
 } as const;
 
-function useMeasuredScale() {
+function useMeasuredScale(containerRef: RefObject<HTMLElement | null>) {
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
+    const node = containerRef.current;
+
+    if (!node) {
+      return;
+    }
+
     const updateScale = () => {
-      const availableWidth = Math.max(0, window.innerWidth - 48);
-      const availableHeight = Math.max(0, window.innerHeight - 48);
+      const availableWidth = Math.max(0, node.clientWidth);
+      const availableHeight = Math.max(0, node.clientHeight);
       const widthScale = availableWidth / DESIGN.width;
       const heightScale = availableHeight / DESIGN.height;
 
@@ -137,10 +143,11 @@ function useMeasuredScale() {
       return () => window.removeEventListener("resize", updateScale);
     }
 
-    window.addEventListener("resize", updateScale);
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(node);
 
-    return () => window.removeEventListener("resize", updateScale);
-  }, []);
+    return () => observer.disconnect();
+  }, [containerRef]);
 
   return scale;
 }
@@ -255,7 +262,8 @@ export function PokerTableScene({
   potAmount,
   visibleActionByPlayerId,
 }: PokerTableSceneProps) {
-  const scale = useMeasuredScale();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scale = useMeasuredScale(containerRef);
   const boardWidth = DESIGN.width * scale;
   const boardHeight = DESIGN.height * scale;
   const tableWidth = DESIGN.tableWidth * scale;
@@ -283,220 +291,235 @@ export function PokerTableScene({
 
   return (
     <div
+      ref={containerRef}
       className="poker-table-scene"
       style={{
         position: "relative",
-        width: `${boardWidth}px`,
-        height: `${boardHeight}px`,
-        display: "block",
-        overflow: "hidden",
+        width: "100%",
+        height: "100%",
+        display: "grid",
+        placeItems: "center",
+        overflow: "visible",
       }}
     >
       <div
         style={{
-          ...styles.tableRim,
-          left: (boardWidth - tableWidth) / 2,
-          top: (boardHeight - tableHeight) / 2,
-          width: tableWidth,
-          height: tableHeight,
-          zIndex: 0,
+          position: "relative",
+          width: boardWidth,
+          height: boardHeight,
         }}
       >
-        <div style={styles.tableSurface} />
-      </div>
+        <div
+          style={{
+            ...styles.tableRim,
+            left: (boardWidth - tableWidth) / 2,
+            top: (boardHeight - tableHeight) / 2,
+            width: tableWidth,
+            height: tableHeight,
+            zIndex: 0,
+          }}
+        >
+          <div style={styles.tableSurface} />
+        </div>
 
-      <div
-        className="poker-table-scene__pot"
-        style={{
-          ...styles.pot,
-          width: DESIGN.potWidth * scale,
-          height: DESIGN.potHeight * scale,
-          top: 314 * scale,
-        }}
-      >
-        <span style={{ ...styles.potLabel, fontSize: `${11 * scale}px` }}>
-          {potLabel}
-        </span>
-        <span style={{ ...styles.potValue, fontSize: `${44 * scale}px` }}>
-          {potAmount}
-        </span>
-      </div>
+        <div
+          className="poker-table-scene__pot"
+          style={{
+            ...styles.pot,
+            width: DESIGN.potWidth * scale,
+            height: DESIGN.potHeight * scale,
+            top: 314 * scale,
+          }}
+        >
+          <span style={{ ...styles.potLabel, fontSize: `${11 * scale}px` }}>
+            {potLabel}
+          </span>
+          <span style={{ ...styles.potValue, fontSize: `${44 * scale}px` }}>
+            {potAmount}
+          </span>
+        </div>
 
-      <div
-        className="poker-table-scene__community"
-        style={{
-          ...styles.communityRow,
-          top: 438 * scale,
-          gap: 18 * scale,
-          width: boardCardsWidth * scale,
-        }}
-      >
-        {Array.from({ length: boardSlots }).map((_, index) => {
-          const card = board[index];
+        <div
+          className="poker-table-scene__community"
+          style={{
+            ...styles.communityRow,
+            top: 438 * scale,
+            gap: 18 * scale,
+            width: boardCardsWidth * scale,
+          }}
+        >
+          {Array.from({ length: boardSlots }).map((_, index) => {
+            const card = board[index];
 
-          return card ? (
-            <TableCard
-              key={`${card.rank}-${card.suit}-${index}`}
-              rank={card.rank}
-              suit={card.suit}
+            return card ? (
+              <TableCard
+                key={`${card.rank}-${card.suit}-${index}`}
+                rank={card.rank}
+                suit={card.suit}
+                style={{
+                  width: DESIGN.communityCardWidth * scale,
+                  height: DESIGN.communityCardHeight * scale,
+                  borderRadius: "12px",
+                }}
+              />
+            ) : (
+              <div
+                key={`community-empty-${index}`}
+                style={{
+                  ...styles.communityCard,
+                  width: DESIGN.communityCardWidth * scale,
+                  height: DESIGN.communityCardHeight * scale,
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {seatPlacements.map((seat) => {
+          const player = playerBySeatId.get(seat.id) ?? null;
+          const localRects = seatLocalRects[seat.layout.kind];
+          const bannerRect = mirrorRect(
+            localRects.banner,
+            DESIGN.seatUnitWidth,
+            DESIGN.seatUnitHeight,
+            seat.layout.flipX,
+            seat.layout.flipY
+          );
+          const cardsWidth = DESIGN.cardWidth * 2 + DESIGN.cardGap;
+          const cardsRect = {
+            left: bannerRect.left + (bannerRect.width - cardsWidth) / 2,
+            top: bannerRect.top - DESIGN.cardHeight + 30,
+            width: cardsWidth,
+            height: DESIGN.cardHeight,
+          };
+          const actionRect = mirrorRect(
+            localRects.action,
+            DESIGN.seatUnitWidth,
+            DESIGN.seatUnitHeight,
+            seat.layout.flipX,
+            seat.layout.flipY
+          );
+          const actionLabel = player ? visibleActionByPlayerId.get(player.id) ?? null : null;
+
+          return (
+            <article
+              key={seat.id}
+              className="poker-table-scene__seat"
               style={{
-                width: DESIGN.communityCardWidth * scale,
-                height: DESIGN.communityCardHeight * scale,
-                borderRadius: "12px",
+                position: "absolute",
+                left: seat.left,
+                top: seat.top,
+                width: DESIGN.seatUnitWidth * scale,
+                height: DESIGN.seatUnitHeight * scale,
+                transform: "translate(-50%, -50%)",
+                overflow: "visible",
+                padding: 0,
+                background: "transparent",
+                border: "none",
+                boxShadow: "none",
+                minWidth: 0,
+                zIndex: 3,
               }}
-            />
-          ) : (
-            <div
-              key={`community-empty-${index}`}
-              style={{
-                ...styles.communityCard,
-                width: DESIGN.communityCardWidth * scale,
-                height: DESIGN.communityCardHeight * scale,
-              }}
-            />
+            >
+              {player?.holeCards.length ? (
+                <div
+                  className="poker-table-scene__hole-cards"
+                  style={{
+                    position: "absolute",
+                    left: cardsRect.left * scale,
+                    top: cardsRect.top * scale,
+                    width: cardsRect.width * scale,
+                    display: "flex",
+                    gap: DESIGN.cardGap * scale,
+                    zIndex: 2,
+                  }}
+                >
+                  {player.holeCards.map((card, index) => (
+                    <TableCard
+                      key={`${player.id}-${card.rank}-${card.suit}-${index}`}
+                      rank={card.rank}
+                      suit={card.suit}
+                      style={{
+                        width: DESIGN.cardWidth * scale,
+                        height: DESIGN.cardHeight * scale,
+                        borderRadius: "10px",
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {actionLabel ? (
+                <div
+                  className="poker-table-scene__action"
+                  style={{
+                    ...styles.actionTag,
+                    left: actionRect.left * scale,
+                    top:
+                      (actionRect.top + (seat.layout.actionNudgeY ?? 0)) * scale,
+                    width: actionRect.width * scale,
+                    height: actionRect.height * scale,
+                    zIndex: 3,
+                    fontSize: `${13 * scale}px`,
+                  }}
+                >
+                  {actionLabel}
+                </div>
+              ) : null}
+
+              <div
+                className="poker-table-scene__banner"
+                style={{
+                  ...styles.seat,
+                  left: bannerRect.left * scale,
+                  top: bannerRect.top * scale,
+                  width: DESIGN.seatWidth * scale,
+                  height: DESIGN.seatHeight * scale,
+                  gap: 14 * scale,
+                  padding: 14 * scale,
+                  zIndex: 4,
+                  background: player
+                    ? styles.seat.background
+                    : "linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.88))",
+                  borderColor: player ? styles.seat.border : EMPTY_SEAT_BANNER_BORDER,
+                  opacity: player ? 1 : 0.55,
+                  filter: player ? "none" : "grayscale(0.35) brightness(0.82)",
+                }}
+              >
+                <div
+                  style={{
+                    ...styles.avatar,
+                    width: 74 * scale,
+                    height: 74 * scale,
+                    background: player
+                      ? styles.avatar.background
+                      : EMPTY_SEAT_AVATAR_BACKGROUND,
+                    borderColor: player ? styles.avatar.border : EMPTY_SEAT_AVATAR_BORDER,
+                  }}
+                />
+                <div style={styles.seatText}>
+                  <div
+                    style={{
+                      ...styles.seatLabel,
+                      fontSize: `${18 * scale}px`,
+                    }}
+                  >
+                    {player?.name ?? seat.label}
+                  </div>
+                  <div
+                    style={{
+                      ...styles.seatStack,
+                      fontSize: `${14 * scale}px`,
+                    }}
+                  >
+                    {player ? `$${player.stack}` : "Empty seat"}
+                  </div>
+                </div>
+              </div>
+            </article>
           );
         })}
       </div>
-
-      {seatPlacements.map((seat) => {
-        const player = playerBySeatId.get(seat.id) ?? null;
-        const localRects = seatLocalRects[seat.layout.kind];
-        const bannerRect = mirrorRect(
-          localRects.banner,
-          DESIGN.seatUnitWidth,
-          DESIGN.seatUnitHeight,
-          seat.layout.flipX,
-          seat.layout.flipY
-        );
-        const cardsWidth = DESIGN.cardWidth * 2 + DESIGN.cardGap;
-        const cardsRect = {
-          left: bannerRect.left + (bannerRect.width - cardsWidth) / 2,
-          top: bannerRect.top - DESIGN.cardHeight + 30,
-          width: cardsWidth,
-          height: DESIGN.cardHeight,
-        };
-        const actionRect = mirrorRect(
-          localRects.action,
-          DESIGN.seatUnitWidth,
-          DESIGN.seatUnitHeight,
-          seat.layout.flipX,
-          seat.layout.flipY
-        );
-        const actionLabel = player ? visibleActionByPlayerId.get(player.id) ?? null : null;
-
-        return (
-          <article
-            key={seat.id}
-            className="poker-table-scene__seat"
-            style={{
-              position: "absolute",
-              left: seat.left,
-              top: seat.top,
-              width: DESIGN.seatUnitWidth * scale,
-              height: DESIGN.seatUnitHeight * scale,
-              transform: "translate(-50%, -50%)",
-              overflow: "visible",
-              padding: 0,
-              background: "transparent",
-              border: "none",
-              boxShadow: "none",
-              minWidth: 0,
-              zIndex: 3,
-            }}
-          >
-            {player?.holeCards.length ? (
-              <div
-                className="poker-table-scene__hole-cards"
-                style={{
-                  position: "absolute",
-                  left: cardsRect.left * scale,
-                  top: cardsRect.top * scale,
-                  width: cardsRect.width * scale,
-                  display: "flex",
-                  gap: DESIGN.cardGap * scale,
-                  zIndex: 2,
-                }}
-              >
-                {player.holeCards.map((card, index) => (
-                  <TableCard
-                    key={`${player.id}-${card.rank}-${card.suit}-${index}`}
-                    rank={card.rank}
-                    suit={card.suit}
-                    style={{
-                      width: DESIGN.cardWidth * scale,
-                      height: DESIGN.cardHeight * scale,
-                      borderRadius: "10px",
-                    }}
-                  />
-                ))}
-              </div>
-            ) : null}
-
-            {actionLabel ? (
-              <div
-                className="poker-table-scene__action"
-                style={{
-                  ...styles.actionTag,
-                  left: actionRect.left * scale,
-                  top:
-                    (actionRect.top + (seat.layout.actionNudgeY ?? 0)) * scale,
-                  width: actionRect.width * scale,
-                  height: actionRect.height * scale,
-                  zIndex: 3,
-                  fontSize: `${13 * scale}px`,
-                }}
-              >
-                {actionLabel}
-              </div>
-            ) : null}
-
-            <div
-              className="poker-table-scene__banner"
-              style={{
-                ...styles.seat,
-                left: bannerRect.left * scale,
-                top: bannerRect.top * scale,
-                width: DESIGN.seatWidth * scale,
-                height: DESIGN.seatHeight * scale,
-                gap: 14 * scale,
-                padding: 14 * scale,
-                zIndex: 4,
-                background: player ? styles.seat.background : EMPTY_SEAT_BANNER_BACKGROUND,
-                borderColor: player ? styles.seat.border : EMPTY_SEAT_BANNER_BORDER,
-                opacity: player ? 1 : 0.72,
-              }}
-            >
-              <div
-                style={{
-                  ...styles.avatar,
-                  width: 74 * scale,
-                  height: 74 * scale,
-                  background: player ? styles.avatar.background : EMPTY_SEAT_AVATAR_BACKGROUND,
-                  borderColor: player ? styles.avatar.border : EMPTY_SEAT_AVATAR_BORDER,
-                }}
-              />
-              <div style={styles.seatText}>
-                <div
-                  style={{
-                    ...styles.seatLabel,
-                    fontSize: `${18 * scale}px`,
-                  }}
-                >
-                  {player?.name ?? seat.label}
-                </div>
-                <div
-                  style={{
-                    ...styles.seatStack,
-                    fontSize: `${14 * scale}px`,
-                  }}
-                >
-                  {player ? `$${player.stack}` : "Empty seat"}
-                </div>
-              </div>
-            </div>
-          </article>
-        );
-      })}
     </div>
   );
 }
