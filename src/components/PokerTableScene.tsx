@@ -257,6 +257,7 @@ const EMPTY_SEAT_AVATAR_BACKGROUND = "rgba(148, 163, 184, 0.12)";
 const EMPTY_SEAT_AVATAR_BORDER = "rgba(148, 163, 184, 0.2)";
 const CURRENT_SEAT_BANNER_BACKGROUND =
   "linear-gradient(180deg, rgba(44, 35, 7, 0.98), rgba(18, 14, 4, 0.98))";
+const MAX_TABLE_SCENE_WIDTH = 1260;
 
 export function PokerTableScene({
   players,
@@ -300,8 +301,9 @@ export function PokerTableScene({
       className="poker-table-scene"
       style={{
         position: "relative",
-        width: "100%",
-        height: "100%",
+        width: `min(100%, ${MAX_TABLE_SCENE_WIDTH}px)`,
+        aspectRatio: `${DESIGN.width} / ${DESIGN.height}`,
+        height: "auto",
         display: "grid",
         placeItems: "center",
         overflow: "visible",
@@ -491,11 +493,7 @@ export function PokerTableScene({
                       ? CURRENT_SEAT_BANNER_BACKGROUND
                       : styles.seat.background
                     : "linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.88))",
-                  borderColor: player
-                    ? isCurrentActor
-                      ? styles.seat.border
-                      : styles.seat.border
-                    : EMPTY_SEAT_BANNER_BORDER,
+                  borderColor: player ? styles.seat.border : EMPTY_SEAT_BANNER_BORDER,
                   opacity: player ? 1 : 0.55,
                   filter: player ? "none" : "grayscale(0.35) brightness(0.82)",
                   boxShadow: player
@@ -521,7 +519,7 @@ export function PokerTableScene({
                   <div
                     style={{
                       ...styles.seatLabel,
-                      fontSize: `${18 * scale}px`,
+                      fontSize: `${20 * scale}px`,
                     }}
                   >
                     {player?.name ?? seat.label}
@@ -530,7 +528,7 @@ export function PokerTableScene({
                         style={{
                           ...styles.currentBadge,
                           marginLeft: 8 * scale,
-                          fontSize: `${10 * scale}px`,
+                          fontSize: `${12 * scale}px`,
                         }}
                       >
                         Current
@@ -540,7 +538,7 @@ export function PokerTableScene({
                   <div
                     style={{
                       ...styles.seatStack,
-                      fontSize: `${14 * scale}px`,
+                      fontSize: `${16 * scale}px`,
                     }}
                   >
                     {player ? `$${player.stack}` : "Empty seat"}
@@ -661,7 +659,7 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "4px 8px",
+    padding: "4px 10px",
     borderRadius: "9999px",
     background: "rgba(250, 204, 21, 0.14)",
     border: "1px solid rgba(250, 204, 21, 0.3)",
