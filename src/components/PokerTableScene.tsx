@@ -255,6 +255,8 @@ const EMPTY_SEAT_BANNER_BACKGROUND = "rgba(15, 23, 42, 0.82)";
 const EMPTY_SEAT_BANNER_BORDER = "rgba(148, 163, 184, 0.22)";
 const EMPTY_SEAT_AVATAR_BACKGROUND = "rgba(148, 163, 184, 0.12)";
 const EMPTY_SEAT_AVATAR_BORDER = "rgba(148, 163, 184, 0.2)";
+const CURRENT_SEAT_BANNER_BACKGROUND =
+  "linear-gradient(180deg, rgba(44, 35, 7, 0.98), rgba(18, 14, 4, 0.98))";
 
 export function PokerTableScene({
   players,
@@ -263,6 +265,7 @@ export function PokerTableScene({
   potAmount,
   showVillainHoleCards,
   visibleActionByPlayerId,
+  currentActorSeatIndex,
 }: PokerTableSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scale = useMeasuredScale(containerRef);
@@ -380,6 +383,7 @@ export function PokerTableScene({
 
         {seatPlacements.map((seat) => {
           const player = playerBySeatId.get(seat.id) ?? null;
+          const isCurrentActor = player?.seatIndex === currentActorSeatIndex;
           const localRects = seatLocalRects[seat.layout.kind];
           const bannerRect = mirrorRect(
             localRects.banner,
@@ -483,11 +487,23 @@ export function PokerTableScene({
                   padding: 14 * scale,
                   zIndex: 4,
                   background: player
-                    ? styles.seat.background
+                    ? isCurrentActor
+                      ? CURRENT_SEAT_BANNER_BACKGROUND
+                      : styles.seat.background
                     : "linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.88))",
-                  borderColor: player ? styles.seat.border : EMPTY_SEAT_BANNER_BORDER,
+                  borderColor: player
+                    ? isCurrentActor
+                      ? styles.seat.border
+                      : styles.seat.border
+                    : EMPTY_SEAT_BANNER_BORDER,
                   opacity: player ? 1 : 0.55,
                   filter: player ? "none" : "grayscale(0.35) brightness(0.82)",
+                  boxShadow: player
+                    ? isCurrentActor
+                      ? "0 0 0 1px rgba(250, 204, 21, 0.42), 0 0 32px rgba(250, 204, 21, 0.18)"
+                      : "none"
+                    : "none",
+                  transform: isCurrentActor ? "translateY(-1px)" : "none",
                 }}
               >
                 <div
@@ -509,6 +525,17 @@ export function PokerTableScene({
                     }}
                   >
                     {player?.name ?? seat.label}
+                    {isCurrentActor ? (
+                      <span
+                        style={{
+                          ...styles.currentBadge,
+                          marginLeft: 8 * scale,
+                          fontSize: `${10 * scale}px`,
+                        }}
+                      >
+                        Current
+                      </span>
+                    ) : null}
                   </div>
                   <div
                     style={{
@@ -603,7 +630,7 @@ const styles = {
   seat: {
     position: "absolute" as const,
     borderRadius: "18px",
-    background: "#090909",
+    background: "linear-gradient(180deg, rgba(14, 17, 24, 0.98), rgba(7, 8, 12, 0.98))",
     border: "1px solid rgba(255,255,255,0.14)",
     boxShadow: "none",
     display: "flex",
@@ -629,5 +656,19 @@ const styles = {
   },
   seatStack: {
     color: "rgba(255,255,255,0.8)",
+  },
+  currentBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "4px 8px",
+    borderRadius: "9999px",
+    background: "rgba(250, 204, 21, 0.14)",
+    border: "1px solid rgba(250, 204, 21, 0.3)",
+    color: "rgba(253, 224, 71, 0.95)",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase" as const,
+    whiteSpace: "nowrap",
+    lineHeight: 1,
   },
 } satisfies Record<string, CSSProperties>;
