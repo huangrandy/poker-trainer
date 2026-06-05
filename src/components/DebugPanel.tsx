@@ -52,38 +52,47 @@ export function DebugPanel({
                 <span>Local only</span>
             </div>
 
-            <div className="debug-panel__summary">
-                <div>
-                    <span>Current actor</span>
-                    <strong>{currentActor ? currentActor.name : "None"}</strong>
-                </div>
-                <div>
-                    <span>Autoplay</span>
-                    <strong>{botAutoplayEnabled ? "On" : "Paused"}</strong>
-                </div>
-                <div>
-                    <span>Reveal cards</span>
-                    <strong>{revealAllCards ? "On" : "Off"}</strong>
-                </div>
-            </div>
+            <p className="debug-panel__meta">
+                Current actor: <strong>{currentActor ? currentActor.name : "None"}</strong>
+            </p>
 
             <div className="debug-panel__toggles">
-                <button
-                    className="action-button"
-                    type="button"
-                    aria-pressed={revealAllCards}
-                    onClick={onToggleRevealAllCards}
-                >
-                    {revealAllCards ? "Hide all cards" : "Reveal all cards"}
-                </button>
-                <button
-                    className="action-button"
-                    type="button"
-                    aria-pressed={botAutoplayEnabled}
-                    onClick={onToggleBotAutoplay}
-                >
-                    {botAutoplayEnabled ? "Pause bot autoplay" : "Resume bot autoplay"}
-                </button>
+                <label className="debug-toggle">
+                    <span className="debug-toggle__copy">
+                        <strong>Reveal cards</strong>
+                        <small>{revealAllCards ? "On" : "Off"}</small>
+                    </span>
+                    <span className="debug-toggle__switch">
+                        <input
+                            aria-label="Reveal cards"
+                            className="debug-toggle__input"
+                            type="checkbox"
+                            checked={revealAllCards}
+                            onChange={() => onToggleRevealAllCards()}
+                        />
+                        <span className="debug-toggle__track" aria-hidden="true">
+                            <span className="debug-toggle__thumb" />
+                        </span>
+                    </span>
+                </label>
+                <label className="debug-toggle">
+                    <span className="debug-toggle__copy">
+                        <strong>Bot autoplay</strong>
+                        <small>{botAutoplayEnabled ? "On" : "Paused"}</small>
+                    </span>
+                    <span className="debug-toggle__switch">
+                        <input
+                            aria-label="Bot autoplay"
+                            className="debug-toggle__input"
+                            type="checkbox"
+                            checked={botAutoplayEnabled}
+                            onChange={() => onToggleBotAutoplay()}
+                        />
+                        <span className="debug-toggle__track" aria-hidden="true">
+                            <span className="debug-toggle__thumb" />
+                        </span>
+                    </span>
+                </label>
                 <button className="primary-button" type="button" onClick={onStepBot} disabled={!canStepBot}>
                     Step bot once
                 </button>

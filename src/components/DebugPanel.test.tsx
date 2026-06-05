@@ -43,8 +43,8 @@ describe("DebugPanel", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Reveal all cards" }));
-    fireEvent.click(screen.getByRole("button", { name: "Resume bot autoplay" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Reveal cards" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Bot autoplay" }));
     fireEvent.click(screen.getByRole("button", { name: "Step bot once" }));
     fireEvent.change(screen.getByRole("combobox", { name: /Bot 1/i }), {
       target: { value: "nit" },
@@ -54,7 +54,7 @@ describe("DebugPanel", () => {
     expect(onToggleBotAutoplay).toHaveBeenCalledTimes(1);
     expect(onStepBot).toHaveBeenCalledTimes(1);
     expect(onPlayerPersonaChange).toHaveBeenCalledWith("bot-1", "nit");
-    expect(screen.getByText("Current actor")).toBeInTheDocument();
+    expect(screen.getByText(/Current actor:/i)).toBeInTheDocument();
     expect(screen.getByText("Effective: TAG")).toBeInTheDocument();
   });
 

@@ -115,10 +115,10 @@ function createShowdownRevealState(): GameState {
 }
 
 function createActionChipState(): GameState {
-  return {
-    ...createSampleGameState(),
-    handNumber: 2,
-    street: "preflop",
+    return {
+        ...createSampleGameState(),
+        handNumber: 2,
+        street: "preflop",
     dealerSeatIndex: 0,
     buttonSeatIndex: 0,
     board: [],
@@ -249,6 +249,28 @@ function createRaiseActionState(): GameState {
       },
     ],
     lastHandResult: null,
+    };
+}
+
+function createPostflopActionChipState(): GameState {
+  const actionChipState = createActionChipState();
+
+  return {
+    ...actionChipState,
+    street: "flop",
+    board: [
+      makeCard("9", "diamonds"),
+      makeCard("8", "clubs"),
+      makeCard("A", "hearts"),
+    ],
+    betting: {
+      ...actionChipState.betting,
+      currentActorSeatIndex: null,
+    },
+    actionHistory: actionChipState.actionHistory.map((record) => ({
+      ...record,
+      street: "flop",
+    })),
   };
 }
 
@@ -410,14 +432,16 @@ describe("App", () => {
     expect(savedSnapshot.gameState.handNumber).toBe(1);
   });
 
-  it("shows recent seat action chips on the table", () => {
-    vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
+  it("shows recent seat action chips on the table", async () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createPostflopActionChipState());
 
     const { container } = render(<App />);
 
-    expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
-    expect(screen.getByText("Call $10")).toBeInTheDocument();
-    expect(screen.getByText("Check")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
+      expect(screen.getByText("Call $10")).toBeInTheDocument();
+      expect(screen.getByText("Check")).toBeInTheDocument();
+    });
   });
 
   it("keeps villain hole cards face down during the hand and dims folded cards", () => {

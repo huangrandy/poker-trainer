@@ -755,13 +755,7 @@ textarea {
     gap: 16px;
 }
 
-.debug-panel__summary {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.debug-panel__summary div,
+.debug-panel__meta,
 .debug-panel__player {
     padding: 12px 14px;
     border-radius: 18px;
@@ -769,7 +763,11 @@ textarea {
     border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
-.debug-panel__summary span,
+.debug-panel__meta {
+    margin: 0;
+}
+
+.debug-panel__meta strong,
 .debug-panel__player small,
 .debug-panel__note,
 .debug-panel__hint {
@@ -778,7 +776,7 @@ textarea {
     font-size: 0.82rem;
 }
 
-.debug-panel__summary strong,
+.debug-panel__meta strong,
 .debug-panel__player-name {
     display: block;
     margin-top: 4px;
@@ -787,9 +785,93 @@ textarea {
 }
 
 .debug-panel__toggles {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr;
     gap: 10px;
+}
+
+.debug-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.debug-toggle__copy {
+    display: grid;
+    gap: 2px;
+}
+
+.debug-toggle__copy strong {
+    color: #f8fafc;
+    font-size: 0.98rem;
+}
+
+.debug-toggle__copy small {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.debug-toggle__switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.debug-toggle__input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.debug-toggle__track {
+    position: relative;
+    width: 54px;
+    height: 32px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.22);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    transition:
+        background 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.debug-toggle__thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #f8fafc;
+    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.28);
+    transition: transform 120ms ease;
+}
+
+.debug-toggle__input:checked + .debug-toggle__track {
+    background: linear-gradient(135deg, #22c55e, #0ea5e9);
+    border-color: rgba(125, 211, 252, 0.42);
+    box-shadow: 0 12px 24px rgba(34, 197, 94, 0.16);
+}
+
+.debug-toggle__input:checked + .debug-toggle__track .debug-toggle__thumb {
+    transform: translateX(22px);
+}
+
+.debug-toggle__input:focus-visible + .debug-toggle__track {
+    outline: 2px solid rgba(125, 211, 252, 0.72);
+    outline-offset: 2px;
 }
 
 .debug-panel__players {
@@ -1007,10 +1089,6 @@ textarea {
     }
 
     .state-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .debug-panel__summary {
         grid-template-columns: 1fr;
     }
 
