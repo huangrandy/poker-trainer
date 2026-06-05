@@ -214,6 +214,7 @@ function TableCard({
     rank,
     suit,
     style,
+    cardRadius,
     scale = 1,
     isFaceDown = false,
     isHighlighted = false,
@@ -222,13 +223,12 @@ function TableCard({
     rank: string;
     suit: string;
     style?: CSSProperties;
+    cardRadius: number;
     scale?: number;
     isFaceDown?: boolean;
     isHighlighted?: boolean;
     isMuted?: boolean;
 }) {
-    const cardRadius = 10 * scale;
-
     return (
         <span
             aria-label={formatCardLabel(rank, suit)}
@@ -337,6 +337,7 @@ export function PokerTableScene({
     const boardCardsWidth =
         boardSlots * DESIGN.cardWidth + (boardSlots - 1) * DESIGN.communityCardGap;
     const centerStackGap = 20 * scale;
+    const cardRadius = 14 * scale;
 
     return (
         <div
@@ -414,6 +415,7 @@ export function PokerTableScene({
                                         width: DESIGN.cardWidth * scale,
                                         height: DESIGN.cardHeight * scale,
                                     }}
+                                    cardRadius={cardRadius}
                                     scale={scale}
                                 />
                             ) : (
@@ -423,6 +425,7 @@ export function PokerTableScene({
                                         ...styles.communityCard,
                                         width: DESIGN.cardWidth * scale,
                                         height: DESIGN.cardHeight * scale,
+                                        borderRadius: `${cardRadius}px`,
                                     }}
                                 />
                             );
@@ -539,6 +542,7 @@ export function PokerTableScene({
                                                 width: holeCardWidth * scale,
                                                 height: holeCardHeight * scale,
                                             }}
+                                            cardRadius={cardRadius}
                                             scale={scale}
                                         />
                                     ))}
