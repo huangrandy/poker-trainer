@@ -135,6 +135,12 @@ describe("simple bot", () => {
     expect(getBotPersonaProfile(bot.botPersonaId).id).toBe("general");
   });
 
+  it("uses the lag persona when selected", () => {
+    const { bot } = createBotDecisionState("lag");
+
+    expect(getBotPersonaProfile(bot.botPersonaId).id).toBe("lag");
+  });
+
   it("uses the nit persona when selected", () => {
     const { bot } = createBotDecisionState("nit");
 

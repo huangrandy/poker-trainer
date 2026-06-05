@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { advanceBotTurns, chooseBotActionForPlayer } from "./simpleBot";
 import { createSampleGameState } from "../game-engine/fixtures";
-import { getLegalActions, applyAction } from "../game-engine/engine";
+import { applyAction, getLegalActions, startHand } from "../game-engine/engine";
 import type { Card, GameState, PlayerAction, PlayerState } from "../game-engine/types";
 import { createStandardCardSet } from "../../lib/poker/cards";
 import { shuffleCards } from "../../lib/poker/deck";
@@ -241,6 +241,16 @@ describe("bot persona distributions", () => {
     );
   });
 
+  it("plays LAG more aggressively than General in pressured preflop spots", () => {
+    const generalMetrics = summarizeActions(createCorpus("general", "pressure", 72));
+    const lagMetrics = summarizeActions(createCorpus("lag", "pressure", 72));
+
+    expect(rate(lagMetrics, "fold")).toBeLessThan(rate(generalMetrics, "fold"));
+    expect(rate(lagMetrics, "bet") + rate(lagMetrics, "raise") + rate(lagMetrics, "allIn")).toBeGreaterThan(
+      rate(generalMetrics, "bet") + rate(generalMetrics, "raise") + rate(generalMetrics, "allIn")
+    );
+  });
+
   it("keeps Nit the tightest of the live personas in pressured preflop spots", () => {
     const tagMetrics = summarizeActions(createCorpus("tag", "pressure", 72));
     const generalMetrics = summarizeActions(createCorpus("general", "pressure", 72));
@@ -263,6 +273,16 @@ describe("bot persona distributions", () => {
     expect(rate(generalMetrics, "check")).toBeLessThanOrEqual(rate(tagMetrics, "check"));
   });
 
+  it("gives LAG the widest opening range when checked to", () => {
+    const generalMetrics = summarizeActions(createCorpus("general", "no_pressure", 48));
+    const lagMetrics = summarizeActions(createCorpus("lag", "no_pressure", 48));
+
+    expect(rate(lagMetrics, "bet") + rate(lagMetrics, "allIn")).toBeGreaterThan(
+      rate(generalMetrics, "bet") + rate(generalMetrics, "allIn")
+    );
+    expect(rate(lagMetrics, "check")).toBeLessThan(rate(generalMetrics, "check"));
+  });
+
   it("keeps the bot legal across mixed postflop spots", () => {
     const mixedCorpus = createCorpus("general", "postflop", 60);
     const metrics = summarizeActions(mixedCorpus);
@@ -273,76 +293,36 @@ describe("bot persona distributions", () => {
   });
 
   it("smokes a longer bot sequence across preflop and flop before returning to the hero", () => {
-    const state: GameState = {
-      ...createSampleGameState(),
-      street: "preflop",
-      board: [],
-      dealerSeatIndex: 0,
-      buttonSeatIndex: 0,
-      players: [
-        {
-          ...createSampleGameState().players[0],
-          holeCards: [makeCard("A", "spades"), makeCard("K", "spades")],
-          stack: 1000,
-          currentStreetBet: 0,
-          totalCommittedThisHand: 0,
-          status: "active",
-          hasActedThisStreet: false,
-        },
-        {
-          ...createSampleGameState().players[1],
-          botPersonaId: "general",
-          holeCards: [makeCard("7", "clubs"), makeCard("2", "diamonds")],
-          stack: 1000,
-          currentStreetBet: 0,
-          totalCommittedThisHand: 0,
-          status: "active",
-          hasActedThisStreet: false,
-        },
-        {
-          id: "bot-2",
-          name: "Bot 2",
-          seatIndex: 2,
-          isHero: false,
-          isBot: true,
-          botPersonaId: "general",
-          stack: 1000,
-          holeCards: [makeCard("8", "clubs"), makeCard("3", "hearts")],
-          currentStreetBet: 0,
-          totalCommittedThisHand: 0,
-          status: "active",
-          hasActedThisStreet: false,
-        },
-      ],
-      betting: {
-        currentBet: 0,
-        minRaiseTo: 10,
-        lastAggressorSeatIndex: null,
-        currentActorSeatIndex: 1,
-      },
-      pot: {
-        mainPot: 0,
-        sidePots: [],
-      },
-      actionHistory: [],
-      lastHandResult: null,
-    };
-
-    const preflopAdvanced = advanceBotTurns(state, { maxSteps: 4 });
-    expect(preflopAdvanced.betting.currentActorSeatIndex).toBe(0);
-    expect(preflopAdvanced.actionHistory.filter((record) => record.playerId !== null)).toHaveLength(2);
-
-    const heroCheck = applyAction(preflopAdvanced, {
-      type: "check",
+    const started = startHand(createSampleGameState(), { random: () => 0 });
+    const heroCall = applyAction(started, {
+      type: "call",
       playerId: "hero",
     });
 
-    expect(heroCheck.street).toBe("flop");
-    expect(heroCheck.board).toHaveLength(3);
-    expect(heroCheck.actionHistory.some((record) => record.type === "deal_next_street")).toBe(true);
+    const preflopAdvanced = advanceBotTurns(heroCall, { maxSteps: 4 });
+    expect(preflopAdvanced.street).toBe("flop");
+    expect(preflopAdvanced.betting.currentActorSeatIndex).toBe(0);
+    const preflopActionCount = preflopAdvanced.actionHistory.filter((record) => record.playerId !== null).length;
+    expect(preflopActionCount).toBeGreaterThanOrEqual(2);
 
-    const postflopAdvanced = advanceBotTurns(heroCheck, { maxSteps: 4 });
+    const heroLegalActions = getLegalActions(preflopAdvanced, "hero");
+    const heroFollowUp = heroLegalActions.some((action) => action.type === "call")
+      ? {
+          type: "call" as const,
+          playerId: "hero",
+        }
+      : {
+          type: "check" as const,
+          playerId: "hero",
+        };
+
+    const heroAction = applyAction(preflopAdvanced, heroFollowUp);
+
+    const postflopAdvanced = advanceBotTurns(heroAction, { maxSteps: 4 });
+    expect(postflopAdvanced.street).toBe("turn");
     expect(postflopAdvanced.betting.currentActorSeatIndex).toBe(0);
-    expect(postflopAdvanced.actionHistory.filter((record) => record.playerId !== null)).toHaveLength(5);
+    expect(postflopAdvanced.actionHistory.filter((record) => record.playerId !== null).length).toBeGreaterThan(
+      preflopActionCount
+    );
   });
 });

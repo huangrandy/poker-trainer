@@ -1,6 +1,6 @@
 import type { Card, GameState, LegalAction, PlayerAction, PlayerState } from "../game-engine/types";
 
-export type BotPersonaId = "tag" | "general" | "nit" | "call_station";
+export type BotPersonaId = "tag" | "general" | "lag" | "nit" | "call_station";
 
 export type BotPersonaProfile = {
   id: BotPersonaId;
@@ -27,12 +27,22 @@ export const BOT_PERSONA_PROFILES: Record<BotPersonaId, BotPersonaProfile> = {
   general: {
     id: "general",
     label: "General",
-    description: "Balanced practice opponent with fewer folds than TAG.",
+    description: "Balanced practice opponent with a real mix of value bets and calls.",
     enabled: true,
-    tightness: 0.42,
-    aggression: 0.34,
-    callDown: 0.55,
-    bluffiness: 0.12,
+    tightness: 0.38,
+    aggression: 0.46,
+    callDown: 0.48,
+    bluffiness: 0.16,
+  },
+  lag: {
+    id: "lag",
+    label: "LAG",
+    description: "Loose-aggressive pressure bot that attacks more often.",
+    enabled: true,
+    tightness: 0.28,
+    aggression: 0.68,
+    callDown: 0.36,
+    bluffiness: 0.28,
   },
   nit: {
     id: "nit",
@@ -59,7 +69,7 @@ export const BOT_PERSONA_PROFILES: Record<BotPersonaId, BotPersonaProfile> = {
 export const DEFAULT_BOT_PERSONA_ID: BotPersonaId = "tag";
 
 export function normalizeBotPersonaId(value: unknown): BotPersonaId {
-  if (value === "tag" || value === "general" || value === "nit" || value === "call_station") {
+  if (value === "tag" || value === "general" || value === "lag" || value === "nit" || value === "call_station") {
     return value;
   }
 
