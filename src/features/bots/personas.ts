@@ -323,11 +323,13 @@ export function chooseBotActionProfiled(
       } else if (legalAction.type === "call") {
         bestAction = {
           type: legalAction.type,
+          amount: state.betting.currentBet - player.currentStreetBet,
           playerId: null,
         };
       } else if (legalAction.type === "all_in") {
         bestAction = {
           type: legalAction.type,
+          amount: legalAction.maxAmount ?? legalAction.minAmount ?? 0,
           playerId: null,
         };
       } else {
@@ -351,11 +353,13 @@ export function chooseBotActionProfiled(
         } else if (legalAction.type === "call") {
           bestAction = {
             type: legalAction.type,
+            amount: state.betting.currentBet - player.currentStreetBet,
             playerId: null,
           };
         } else if (legalAction.type === "all_in") {
           bestAction = {
             type: legalAction.type,
+            amount: legalAction.maxAmount ?? legalAction.minAmount ?? 0,
             playerId: null,
           };
         } else {

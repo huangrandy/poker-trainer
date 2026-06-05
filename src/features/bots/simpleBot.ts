@@ -25,6 +25,14 @@ function pickActionByType(legalActions: LegalAction[], type: LegalAction["type"]
     };
   }
 
+  if (type === "call") {
+    return {
+      type,
+      playerId: null,
+      amount: action.callAmount ?? 0,
+    };
+  }
+
   return {
     type,
     playerId: null,

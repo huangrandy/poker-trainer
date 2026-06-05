@@ -65,6 +65,16 @@ describe("simple bot", () => {
     });
   });
 
+  it("includes the call amount when choosing a call", () => {
+    const action = chooseSimpleBotAction([{ type: "call", callAmount: 15 }]);
+
+    expect(action).toEqual({
+      type: "call",
+      playerId: null,
+      amount: 15,
+    });
+  });
+
   it("chooses the minimum legal bet when betting is available", () => {
     const action = chooseSimpleBotAction([
       { type: "bet", minAmount: 10, maxAmount: 100 },
