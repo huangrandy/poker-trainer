@@ -103,10 +103,6 @@ export function DebugPanel({
                 <span>Local only</span>
             </div>
 
-            <p className="debug-panel__meta">
-                Current actor: <strong>{currentActor ? currentActor.name : "None"}</strong>
-            </p>
-
             <div className="debug-panel__toggles">
                 <label className="debug-toggle">
                     <span className="debug-toggle__copy">
