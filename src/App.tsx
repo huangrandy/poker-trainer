@@ -678,6 +678,22 @@ export default function App() {
     }, [raiseAction]);
 
     useEffect(() => {
+        if (gameState.street !== "preflop") {
+            if (blindActionLabels.size > 0) {
+                setBlindActionLabels(new Map());
+            }
+
+            return;
+        }
+
+        if (blindRevealActiveRef.current) {
+            return;
+        }
+
+        setBlindActionLabels(new Map(buildBlindRevealActions(gameState).map((entry) => [entry.playerId, entry.label])));
+    }, [blindActionLabels.size, gameState]);
+
+    useEffect(() => {
         savePersistedGameState(gameState);
     }, [gameState]);
 
