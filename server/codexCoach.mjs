@@ -33,6 +33,7 @@ function normalizeCoachPayload(parsed, request) {
 
 function runCodexExec({
   command,
+  model,
   args,
   prompt,
   outputFile,
@@ -40,8 +41,18 @@ function runCodexExec({
   cwd,
   spawnImpl,
   readFileImpl,
+  trace,
 }) {
   return new Promise((resolve, reject) => {
+    trace?.info("codex.spawn", {
+      command,
+      model: model ?? "default",
+      cwd,
+      outputFile,
+      args,
+      promptLength: prompt.length,
+    });
+
     const child = spawnImpl(command, args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
@@ -61,16 +72,27 @@ function runCodexExec({
 
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
+      trace?.warn("codex.timeout", {
+        timeoutMs,
+      });
       reject(new Error("Codex coach request timed out."));
     }, timeoutMs);
 
     child.on("error", (error) => {
       clearTimeout(timer);
+      trace?.warn("codex.error", {
+        message: error instanceof Error ? error.message : String(error),
+      });
       reject(error);
     });
 
     child.on("close", async (code) => {
       clearTimeout(timer);
+      trace?.info("codex.close", {
+        code,
+        stdout: stdout.trim() ? stdout : null,
+        stderr: stderr.trim() ? stderr : null,
+      });
 
       if (code !== 0) {
         reject(new Error(`Codex exited with code ${code}: ${stderr || stdout || "no output"}`));
@@ -79,18 +101,30 @@ function runCodexExec({
 
       try {
         const raw = await readFileImpl(outputFile, "utf8");
+        trace?.info("codex.output.read", {
+          outputFile,
+          raw,
+        });
         resolve(raw);
       } catch (error) {
+        trace?.warn("codex.output.missing", {
+          outputFile,
+          message: error instanceof Error ? error.message : String(error),
+        });
         reject(new Error(`Codex did not write a coach response file: ${error instanceof Error ? error.message : String(error)}`));
       }
     });
 
+    trace?.info("codex.stdin.write", {
+      prompt,
+    });
     child.stdin.end(prompt);
   });
 }
 
 export function createCodexCoachAdapter({
   command = "codex",
+  model = null,
   timeoutMs = 120000,
   cwd = process.cwd(),
   spawnImpl = spawn,
@@ -101,9 +135,15 @@ export function createCodexCoachAdapter({
 } = {}) {
   const schemaPath = resolve(fileURLToPath(new URL("./coach-response.schema.json", import.meta.url)));
 
-  return async (request, prompt) => {
+  return async (request, prompt, { trace } = {}) => {
     const tempDir = await mkdtempImpl(join(tmpdirImpl(), "poker-coach-"));
     const outputFile = join(tempDir, "coach-response.json");
+
+    trace?.info("codex.adapter.start", {
+      tempDir,
+      outputFile,
+      model: model ?? "default",
+    });
 
     try {
       const raw = await runCodexExec({
@@ -113,6 +153,7 @@ export function createCodexCoachAdapter({
           "never",
           "-s",
           "read-only",
+          ...(model ? ["-m", model] : []),
           "exec",
           "--skip-git-repo-check",
           "--output-schema",
@@ -132,12 +173,24 @@ export function createCodexCoachAdapter({
         cwd,
         spawnImpl,
         readFileImpl,
+        trace,
       });
 
+      trace?.info("codex.parse.start", {
+        raw,
+      });
       const parsed = JSON.parse(raw);
+      trace?.info("codex.parse.ok", {
+        keys: Object.keys(parsed),
+      });
 
-      return normalizeCoachPayload(parsed, request);
+      const normalized = normalizeCoachPayload(parsed, request);
+      trace?.info("codex.adapter.done", normalized);
+      return normalized;
     } finally {
+      trace?.info("codex.cleanup", {
+        tempDir,
+      });
       await rmImpl(tempDir, { recursive: true, force: true });
     }
   };

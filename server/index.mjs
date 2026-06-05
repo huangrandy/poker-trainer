@@ -1,6 +1,9 @@
 import http from "node:http";
+import { randomUUID } from "node:crypto";
+import { createCoachLogStore } from "./logStore.mjs";
 import { buildCoachPrompt } from "./prompt.mjs";
 import { createCoachAdapterFromEnv } from "./coachAdapters.mjs";
+import { createCoachTracer } from "./trace.mjs";
 
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -111,53 +114,245 @@ function jsonResponse(res, statusCode, body) {
   res.end(JSON.stringify(body));
 }
 
-async function readJsonBody(req) {
+function htmlResponse(res, statusCode, body) {
+  res.writeHead(statusCode, {
+    "content-type": "text/html; charset=utf-8",
+  });
+  res.end(body);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderLogPage(entries, filePath) {
+  const rows = entries
+    .map((entry) => {
+      const details = entry.details === null || entry.details === undefined
+        ? ""
+        : `<pre class="coach-log__details">${escapeHtml(
+            typeof entry.details === "string" ? entry.details : JSON.stringify(entry.details, null, 2)
+          )}</pre>`;
+
+      return `
+        <article class="coach-log__entry coach-log__entry--${escapeHtml(entry.level.toLowerCase())}">
+          <header class="coach-log__meta">
+            <span class="coach-log__timestamp">${escapeHtml(entry.timestamp)}</span>
+            <span class="coach-log__step">${escapeHtml(entry.step)}</span>
+            <span class="coach-log__elapsed">+${escapeHtml(entry.elapsedMs)}ms</span>
+            <span class="coach-log__level">${escapeHtml(entry.level)}</span>
+          </header>
+          ${details}
+        </article>
+      `;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Coach Logs</title>
+      <style>
+        :root {
+          color-scheme: dark;
+          --bg: #0a0f14;
+          --panel: #101821;
+          --panel-border: #233041;
+          --text: #e6edf3;
+          --muted: #90a4b8;
+          --accent: #6ee7b7;
+          --warn: #fbbf24;
+          --error: #f87171;
+        }
+        body {
+          margin: 0;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          background: radial-gradient(circle at top, #132131, var(--bg) 55%);
+          color: var(--text);
+        }
+        .coach-log {
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 24px;
+        }
+        .coach-log__header {
+          display: grid;
+          gap: 8px;
+          margin-bottom: 20px;
+          padding: 18px 20px;
+          border: 1px solid var(--panel-border);
+          border-radius: 16px;
+          background: rgba(16, 24, 33, 0.88);
+        }
+        .coach-log__header h1 {
+          margin: 0;
+          font-size: 20px;
+        }
+        .coach-log__header p,
+        .coach-log__header code {
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
+        }
+        .coach-log__entry {
+          margin-bottom: 14px;
+          padding: 16px 18px;
+          border: 1px solid var(--panel-border);
+          border-radius: 14px;
+          background: rgba(16, 24, 33, 0.92);
+        }
+        .coach-log__entry--warn {
+          border-color: rgba(251, 191, 36, 0.35);
+        }
+        .coach-log__entry--error {
+          border-color: rgba(248, 113, 113, 0.35);
+        }
+        .coach-log__meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px 14px;
+          color: var(--muted);
+          font-size: 12px;
+          margin-bottom: 10px;
+        }
+        .coach-log__step {
+          color: var(--accent);
+        }
+        .coach-log__level {
+          color: var(--warn);
+        }
+        .coach-log__details {
+          margin: 0;
+          white-space: pre-wrap;
+          word-break: break-word;
+          color: var(--text);
+          font-size: 13px;
+          line-height: 1.5;
+        }
+      </style>
+    </head>
+    <body>
+      <main class="coach-log">
+        <header class="coach-log__header">
+          <h1>Coach Logs</h1>
+          <p>Recent persisted trace entries from the local coach server.</p>
+          <p><code>${escapeHtml(filePath)}</code></p>
+        </header>
+        ${rows || "<p>No coach logs yet.</p>"}
+      </main>
+    </body>
+  </html>`;
+}
+
+async function readRawBody(req) {
   let raw = "";
 
   for await (const chunk of req) {
     raw += typeof chunk === "string" ? chunk : chunk.toString("utf8");
   }
 
-  if (raw.length === 0) {
-    return null;
-  }
-
-  return JSON.parse(raw);
+  return raw;
 }
 
-export async function handleCoachRequest(req, res, { coachAdapter = createCoachAdapterFromEnv() } = {}) {
-  let body;
+export async function handleCoachRequest(
+  req,
+  res,
+  {
+    coachAdapter = createCoachAdapterFromEnv(),
+    traceEnabled = process.env.COACH_TRACE !== "0",
+    logStore = createCoachLogStore({ filePath: process.env.COACH_LOG_FILE }),
+  } = {}
+) {
+  const tracer = createCoachTracer({
+    enabled: traceEnabled,
+    requestId: randomUUID(),
+    sink: (entry) => {
+      logStore.append(entry);
+    },
+  });
 
   try {
-    body = await readJsonBody(req);
-  } catch {
+    tracer.info("request.start", {
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+    });
+
+    const rawBody = await readRawBody(req);
+    tracer.info("request.body.raw", rawBody);
+
+    if (rawBody.length === 0) {
+      throw new Error("Request body must be valid JSON.");
+    }
+
+    const body = JSON.parse(rawBody);
+    tracer.info("request.body.parsed", body);
+
+    const validationError = validateCoachRequest(body);
+
+    if (validationError) {
+      tracer.warn("request.validation.failed", {
+        validationError,
+      });
+      jsonResponse(res, 400, {
+        ok: false,
+        error: validationError,
+      });
+      return;
+    }
+
+    tracer.info("request.validated", {
+      handNumber: body.snapshot.handNumber,
+      street: body.snapshot.street,
+      sessionId: body.sessionId ?? null,
+    });
+
+    const prompt = buildCoachPrompt(body);
+    tracer.info("prompt.built", {
+      prompt,
+    });
+
+    tracer.info("adapter.dispatch", {
+      provider: process.env.COACH_PROVIDER ?? "mock",
+    });
+
+    const response = await coachAdapter(body, prompt, { trace: tracer });
+
+    tracer.info("response.ready", response);
+
+    jsonResponse(res, 200, {
+      ...response,
+      prompt,
+    });
+    tracer.info("response.sent", {
+      statusCode: 200,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    tracer.warn("request.failed", {
+      message,
+    });
+
     jsonResponse(res, 400, {
       ok: false,
-      error: "Request body must be valid JSON.",
+      error: error instanceof SyntaxError ? "Request body must be valid JSON." : message,
     });
-    return;
   }
-
-  const validationError = validateCoachRequest(body);
-
-  if (validationError) {
-    jsonResponse(res, 400, {
-      ok: false,
-      error: validationError,
-    });
-    return;
-  }
-
-  const prompt = buildCoachPrompt(body);
-  const response = await coachAdapter(body, prompt);
-
-  jsonResponse(res, 200, {
-    ...response,
-    prompt,
-  });
 }
 
-export function createCoachServer({ coachAdapter = createCoachAdapterFromEnv() } = {}) {
+export function createCoachServer({
+  coachAdapter = createCoachAdapterFromEnv(),
+  traceEnabled = process.env.COACH_TRACE !== "0",
+  logStore = createCoachLogStore({ filePath: process.env.COACH_LOG_FILE }),
+} = {}) {
+
   return http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
 
@@ -166,8 +361,22 @@ export function createCoachServer({ coachAdapter = createCoachAdapterFromEnv() }
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/coach-logs") {
+      htmlResponse(res, 200, renderLogPage(logStore.list(), logStore.filePath));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/coach/logs") {
+      jsonResponse(res, 200, {
+        ok: true,
+        filePath: logStore.filePath,
+        entries: logStore.list(),
+      });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/coach") {
-      void handleCoachRequest(req, res, { coachAdapter });
+      void handleCoachRequest(req, res, { coachAdapter, traceEnabled, logStore });
       return;
     }
 

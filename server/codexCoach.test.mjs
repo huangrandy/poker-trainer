@@ -29,6 +29,7 @@ describe("codex coach adapter", () => {
     const spawnCalls = [];
     const adapter = createCodexCoachAdapter({
       command: "codex",
+      model: "gpt-5.4-nano",
       cwd: "/workdir",
       timeoutMs: 1000,
       spawnImpl: (command, args, options) => {
@@ -55,6 +56,8 @@ describe("codex coach adapter", () => {
 
     expect(spawnCalls).toHaveLength(1);
     expect(spawnCalls[0].command).toBe("codex");
+    expect(spawnCalls[0].args).toContain("-m");
+    expect(spawnCalls[0].args).toContain("gpt-5.4-nano");
     expect(spawnCalls[0].args).toContain("exec");
     expect(spawnCalls[0].args).toContain("--output-schema");
     expect(spawnCalls[0].args).toContain("--output-last-message");
@@ -70,4 +73,3 @@ describe("codex coach adapter", () => {
     });
   });
 });
-
