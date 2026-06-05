@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { within } from "@testing-library/dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as engine from "./features/game-engine/engine";
@@ -173,6 +173,63 @@ function createActionChipState(): GameState {
         street: "preflop",
         handNumber: 2,
         timestampMs: 2,
+      },
+    ],
+    lastHandResult: null,
+  };
+}
+
+function createRaiseActionState(): GameState {
+  return {
+    ...createSampleGameState(),
+    handNumber: 2,
+    street: "preflop",
+    dealerSeatIndex: 1,
+    buttonSeatIndex: 1,
+    board: [],
+    deck: createSampleGameState().deck,
+    players: createSampleGameState().players.map((player) => {
+      if (player.id === "hero") {
+        return {
+          ...player,
+          stack: 940,
+          holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 10,
+          totalCommittedThisHand: 10,
+          status: "active" as const,
+          hasActedThisStreet: false,
+        };
+      }
+
+      return {
+        ...player,
+        stack: 950,
+        holeCards: [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+        currentStreetBet: 50,
+        totalCommittedThisHand: 50,
+        status: "active" as const,
+        hasActedThisStreet: true,
+      };
+    }),
+    betting: {
+      currentBet: 50,
+      minRaiseTo: 100,
+      lastAggressorSeatIndex: 1,
+      currentActorSeatIndex: 0,
+    },
+    pot: {
+      mainPot: 100,
+      sidePots: [],
+    },
+    actionHistory: [
+      {
+        id: "2:1",
+        type: "bet",
+        playerId: "bot-1",
+        amount: 50,
+        street: "preflop",
+        handNumber: 2,
+        timestampMs: 1,
       },
     ],
     lastHandResult: null,
@@ -382,6 +439,40 @@ describe("App", () => {
 
     expect(actionStrip).not.toBeNull();
     expect(within(actionStrip as HTMLElement).getByRole("button", { name: "Fold" })).toBeInTheDocument();
+  });
+
+  it("opens a raise tray and confirms a sized raise", async () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createRaiseActionState());
+
+    const { container } = render(<App />);
+
+    act(() => {
+      screen.getByRole("button", { name: "Raise $100" }).dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+
+    const raiseTray = container.querySelector(".raise-tray");
+    expect(raiseTray).not.toBeNull();
+    expect(within(raiseTray as HTMLElement).getByText("Raise to")).toBeInTheDocument();
+    expect(screen.getByLabelText("Raise amount")).toHaveValue("100");
+
+    act(() => {
+      fireEvent.click(within(raiseTray as HTMLElement).getByRole("button", { name: /3\/4 POT/i }));
+    });
+
+    expect(screen.getByLabelText("Raise amount")).toHaveValue("125");
+
+    act(() => {
+      within(raiseTray as HTMLElement).getByRole("button", { name: "Confirm raise" }).dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Raise controls")).not.toBeInTheDocument();
+      expect(screen.getByText(/Hero raised to \$125/)).toBeInTheDocument();
+    });
   });
 
   it("renders the six-seat ring without current-actor styling", () => {

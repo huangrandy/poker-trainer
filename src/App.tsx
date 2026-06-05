@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { PokerTableScene } from "./components/PokerTableScene";
 import { advanceBotTurns } from "./features/bots";
 import {
@@ -53,6 +53,12 @@ function getSuitTone(suit: string): string {
 }
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
+type RaisePresetKey = "min" | "half_pot" | "three_quarter_pot" | "pot" | "max";
+type RaiseLegalAction = LegalAction & {
+    type: "raise";
+    minAmount: number;
+    maxAmount: number;
+};
 
 const BLIND_REVEAL_DELAY_MS = 500;
 const BOT_ACTION_DELAY_MS = 500;
@@ -201,6 +207,53 @@ function getLegalActionLabel(action: LegalAction): string {
     }
 
     return action.type[0].toUpperCase() + action.type.slice(1);
+}
+
+function isRaiseLegalAction(action: LegalAction): action is RaiseLegalAction {
+    return action.type === "raise" && typeof action.minAmount === "number" && typeof action.maxAmount === "number";
+}
+
+function clampAmount(amount: number, minAmount: number, maxAmount: number): number {
+    return Math.max(minAmount, Math.min(maxAmount, Math.round(amount)));
+}
+
+function getRaisePresetAmount(
+    preset: RaisePresetKey,
+    state: GameState,
+    action: RaiseLegalAction
+): number {
+    const minAmount = action.minAmount ?? 0;
+    const maxAmount = action.maxAmount ?? minAmount;
+    const currentBet = state.betting.currentBet;
+    const potAmount = state.pot.mainPot;
+
+    switch (preset) {
+        case "min":
+            return minAmount;
+        case "half_pot":
+            return clampAmount(currentBet + potAmount * 0.5, minAmount, maxAmount);
+        case "three_quarter_pot":
+            return clampAmount(currentBet + potAmount * 0.75, minAmount, maxAmount);
+        case "pot":
+            return clampAmount(currentBet + potAmount, minAmount, maxAmount);
+        case "max":
+            return maxAmount;
+    }
+}
+
+function getRaisePresetLabel(preset: RaisePresetKey): string {
+    switch (preset) {
+        case "min":
+            return "MIN";
+        case "half_pot":
+            return "1/2 POT";
+        case "three_quarter_pot":
+            return "3/4 POT";
+        case "pot":
+            return "POT";
+        case "max":
+            return "MAX";
+    }
 }
 
 function createInitialGameState(): GameState {
@@ -499,16 +552,23 @@ function ActionButton({
     action,
     playerId,
     onAction,
+    onOpenRaise,
 }: {
     action: LegalAction;
     playerId: string;
     onAction: (action: PlayerAction) => void;
+    onOpenRaise: (action: RaiseLegalAction) => void;
 }) {
     return (
         <button
             className="action-button"
             type="button"
             onClick={() => {
+                if (isRaiseLegalAction(action)) {
+                    onOpenRaise(action);
+                    return;
+                }
+
                 onAction({
                     type: action.type,
                     playerId,
@@ -525,6 +585,7 @@ export default function App() {
     const [gameState, setGameState] = useState<GameState>(() => loadPersistedGameState() ?? createInitialGameState());
     const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() => new Map());
     const [blindActionLabels, setBlindActionLabels] = useState<Map<string, string>>(() => new Map());
+    const [raiseDraft, setRaiseDraft] = useState<{ action: RaiseLegalAction; amount: number } | null>(null);
     const [tableLocked, setTableLocked] = useState(true);
     const [streetReveal, setStreetReveal] = useState({
         active: false,
@@ -563,6 +624,10 @@ export default function App() {
 
         return getLegalActions(gameState, currentActor.id);
     }, [gameState, currentActor]);
+    const raiseAction = useMemo(
+        () => legalActions.find(isRaiseLegalAction) ?? null,
+        [legalActions]
+    );
 
     const handResult = gameState.lastHandResult;
     const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
@@ -602,6 +667,12 @@ export default function App() {
 
         return keys;
     }, [handResult]);
+
+    useEffect(() => {
+        if (!raiseAction) {
+            setRaiseDraft(null);
+        }
+    }, [raiseAction]);
 
     useEffect(() => {
         savePersistedGameState(gameState);
@@ -796,6 +867,60 @@ export default function App() {
         });
     }
 
+    function handleOpenRaise(action: RaiseLegalAction) {
+        if (tableLocked) {
+            return;
+        }
+
+        setRaiseDraft({
+            action,
+            amount: action.minAmount ?? 0,
+        });
+    }
+
+    function handleRaisePresetClick(preset: RaisePresetKey) {
+        if (!raiseDraft) {
+            return;
+        }
+
+        setRaiseDraft({
+            action: raiseDraft.action,
+            amount: getRaisePresetAmount(preset, gameState, raiseDraft.action),
+        });
+    }
+
+    function handleRaiseAmountChange(event: ChangeEvent<HTMLInputElement>) {
+        if (!raiseDraft) {
+            return;
+        }
+
+        setRaiseDraft({
+            action: raiseDraft.action,
+            amount: clampAmount(
+                Number(event.target.value),
+                raiseDraft.action.minAmount ?? 0,
+                raiseDraft.action.maxAmount ?? raiseDraft.action.minAmount ?? 0
+            ),
+        });
+    }
+
+    function handleConfirmRaise() {
+        if (!currentActor || !raiseDraft) {
+            return;
+        }
+
+        handleAction({
+            type: "raise",
+            playerId: currentActor.id,
+            amount: raiseDraft.amount,
+        });
+        setRaiseDraft(null);
+    }
+
+    function handleCancelRaise() {
+        setRaiseDraft(null);
+    }
+
     function handleNewHand() {
         if (!canStartNextHand) {
             return;
@@ -859,6 +984,60 @@ export default function App() {
                 </div>
 
                 <section className="table-actions" aria-label="Legal actions">
+                    {raiseDraft && currentActor ? (
+                        <div className="raise-tray" aria-label="Raise controls">
+                            <div className="raise-tray__presets" role="group" aria-label="Raise sizing presets">
+                                {(["min", "half_pot", "three_quarter_pot", "pot", "max"] as RaisePresetKey[]).map((preset) => {
+                                    const amount = getRaisePresetAmount(preset, gameState, raiseDraft.action);
+                                    const isActive = amount === raiseDraft.amount;
+
+                                    return (
+                                        <button
+                                            key={preset}
+                                            type="button"
+                                            className={[
+                                                "raise-tray__preset",
+                                                isActive ? "is-active" : "",
+                                            ]
+                                                .filter(Boolean)
+                                                .join(" ")}
+                                            onClick={() => handleRaisePresetClick(preset)}
+                                        >
+                                            <span>{getRaisePresetLabel(preset)}</span>
+                                            <strong>${amount}</strong>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="raise-tray__body">
+                                <div className="raise-tray__amount">
+                                    <span>Raise to</span>
+                                    <strong>${raiseDraft.amount}</strong>
+                                </div>
+
+                                <input
+                                    aria-label="Raise amount"
+                                    className="raise-tray__slider"
+                                    type="range"
+                                    min={raiseDraft.action.minAmount ?? 0}
+                                    max={raiseDraft.action.maxAmount ?? raiseDraft.action.minAmount ?? 0}
+                                    step={1}
+                                    value={raiseDraft.amount}
+                                    onChange={handleRaiseAmountChange}
+                                />
+
+                                <div className="raise-tray__actions">
+                                    <button className="raise-tray__secondary-button" type="button" onClick={handleCancelRaise}>
+                                        Cancel
+                                    </button>
+                                    <button className="raise-tray__primary-button" type="button" onClick={handleConfirmRaise}>
+                                        Confirm raise
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
                     <div className="table-actions__row">
                         {legalActions.length > 0 ? (
                             legalActions.map((action) => (
@@ -867,6 +1046,7 @@ export default function App() {
                                     action={action}
                                     playerId={currentActor?.id ?? ""}
                                     onAction={handleAction}
+                                    onOpenRaise={handleOpenRaise}
                                 />
                             ))
                         ) : (
