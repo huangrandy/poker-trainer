@@ -189,52 +189,6 @@ function createBoardHeaderState(): GameState {
   };
 }
 
-function createActionCalloutState(): GameState {
-  return {
-    ...createSampleGameState(),
-    handNumber: 2,
-    street: "preflop",
-    dealerSeatIndex: 0,
-    buttonSeatIndex: 0,
-    board: [],
-    deck: createSampleGameState().deck,
-    players: createSampleGameState().players.map((player) => ({
-      ...player,
-      stack: 990,
-      currentStreetBet: 0,
-      totalCommittedThisHand: 10,
-      status: "active" as const,
-      hasActedThisStreet: true,
-      holeCards:
-        player.id === "hero"
-          ? [makeCard("A", "clubs"), makeCard("K", "diamonds")]
-          : [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
-    })),
-    betting: {
-      currentBet: 0,
-      minRaiseTo: 10,
-      lastAggressorSeatIndex: null,
-      currentActorSeatIndex: null,
-    },
-    pot: {
-      mainPot: 10,
-      sidePots: [],
-    },
-    actionHistory: [
-      {
-        id: "2:1",
-        type: "call",
-        playerId: "hero",
-        amount: 10,
-        street: "preflop",
-        handNumber: 2,
-        timestampMs: 1,
-      },
-    ],
-    lastHandResult: null,
-  };
-}
-
 function createBotDelayState(): GameState {
   return {
     ...createSampleGameState(),
@@ -266,7 +220,17 @@ function createBotDelayState(): GameState {
       mainPot: 10,
       sidePots: [],
     },
-    actionHistory: [],
+    actionHistory: [
+      {
+        id: "2:1",
+        type: "call",
+        playerId: "hero",
+        amount: 10,
+        street: "preflop",
+        handNumber: 2,
+        timestampMs: 1,
+      },
+    ],
     lastHandResult: null,
   };
 }
@@ -365,37 +329,41 @@ describe("App", () => {
   it("shows recent seat action chips on the table", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
 
-    render(<App />);
+    const { container } = render(<App />);
 
+    expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
     expect(screen.getByText("Call $10")).toBeInTheDocument();
     expect(screen.getByText("Check")).toBeInTheDocument();
   });
 
-  it("does not render the old floating latest-action callout", () => {
-    vi.spyOn(engine, "startHand").mockImplementation(() => createActionCalloutState());
-
-    const { container } = render(<App />);
-    const callout = container.querySelector(".table-stage__action-callout");
-
-    expect(callout).toBeNull();
-    expect(screen.getByText("Call $10")).toBeInTheDocument();
-  });
-
-  it("advances bot turns after a delay instead of instantly", async () => {
+  it("keeps the bot chip visible until the staged street advance completes", async () => {
     vi.useFakeTimers();
     vi.spyOn(engine, "startHand").mockImplementation(() => createBotDelayState());
 
     const { container } = render(<App />);
+    const scene = container.querySelector(".poker-table-scene");
 
-    expect(screen.getByText("Bot 1")).toBeInTheDocument();
     expect(screen.getByText("Hero")).toBeInTheDocument();
+    expect(scene).not.toBeNull();
     expect(container.querySelector(".is-current")).toBeNull();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(screen.getByText("Bot 1")).toBeInTheDocument();
+    expect(within(scene as HTMLElement).getByText("Check")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(499);
+    });
+
+    expect(within(scene as HTMLElement).getByText("Check")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(within(scene as HTMLElement).queryByText("Check")).not.toBeInTheDocument();
   });
 
   it("renders the community cards directly without a face-down reveal", async () => {

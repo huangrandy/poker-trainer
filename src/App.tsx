@@ -54,8 +54,8 @@ function getSuitTone(suit: string): string {
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
 
-const BOT_ACTION_DELAY_MS = 1000;
-const STREET_REVEAL_DELAY_MS = 450;
+const BOT_ACTION_DELAY_MS = 500;
+const STREET_REVEAL_DELAY_MS = 500;
 
 function getSeatActionPlacement(positionClass: string): SeatActionPlacement {
     if (positionClass === "seat-top") {
@@ -312,50 +312,19 @@ function ActionButton({
 
 export default function App() {
     const [gameState, setGameState] = useState<GameState>(() => createInitialGameState());
+    const [displayGameState, setDisplayGameState] = useState<GameState>(() => createInitialGameState());
     const [streetReveal, setStreetReveal] = useState({
         active: false,
         fromIndex: 0,
     });
     const botTimerRef = useRef<number | null>(null);
     const revealTimerRef = useRef<number | null>(null);
-    const lastHandledDealIdRef = useRef<string | null>(null);
-    const lastFullyRevealedBoardLengthRef = useRef(0);
+    const lastDisplayedGameStateRef = useRef<GameState | null>(null);
 
     const currentActor = useMemo(
         () => gameState.players.find((player) => player.seatIndex === gameState.betting.currentActorSeatIndex) ?? null,
         [gameState.betting.currentActorSeatIndex, gameState.players]
     );
-
-    const latestStreetDealRecord = useMemo(() => {
-        for (let index = gameState.actionHistory.length - 1; index >= 0; index -= 1) {
-            const record = gameState.actionHistory[index];
-
-            if (
-                record.handNumber === gameState.handNumber &&
-                record.street === gameState.street &&
-                record.type === "deal_next_street"
-            ) {
-                return record;
-            }
-        }
-
-        return null;
-    }, [gameState.actionHistory, gameState.handNumber, gameState.street]);
-
-    const latestPlayerActionRecord = useMemo(() => {
-        for (let index = gameState.actionHistory.length - 1; index >= 0; index -= 1) {
-            const record = gameState.actionHistory[index];
-
-            if (
-                record.handNumber === gameState.handNumber &&
-                record.playerId !== null
-            ) {
-                return record;
-            }
-        }
-
-        return null;
-    }, [gameState.actionHistory, gameState.handNumber, gameState.street]);
 
     const legalActions = useMemo(() => {
         if (!currentActor) {
@@ -366,26 +335,29 @@ export default function App() {
     }, [gameState, currentActor]);
 
     const handResult = gameState.lastHandResult;
+    const displayHandResult = displayGameState.lastHandResult;
     const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
-    const showVillainHoleCards = gameState.street === "showdown" || handResult?.kind === "showdown";
-    const centerPotLabel = isHandComplete ? "Pot awarded" : "Pot";
-    const centerPotAmount = handResult?.potAwarded ?? gameState.pot.mainPot;
+    const showVillainHoleCards =
+        displayGameState.street === "showdown" || displayHandResult?.kind === "showdown";
+    const centerPotLabel =
+        displayGameState.street === "hand_complete" && displayHandResult !== null ? "Pot awarded" : "Pot";
+    const centerPotAmount = displayHandResult?.potAwarded ?? displayGameState.pot.mainPot;
     const handResultByPlayerId = useMemo(
         () =>
             new Map(
-                handResult?.playerResults.map((result) => [result.playerId, result] as const) ?? []
+                displayHandResult?.playerResults.map((result) => [result.playerId, result] as const) ?? []
             ),
-        [handResult]
+        [displayHandResult]
     );
     const visibleActionByPlayerId = useMemo(() => {
         const latestActions = new Map<string, string>();
 
-        for (const record of gameState.actionHistory) {
+        for (const record of displayGameState.actionHistory) {
             if (record.playerId === null) {
                 continue;
             }
 
-            if (record.handNumber !== gameState.handNumber || record.street !== gameState.street) {
+            if (record.handNumber !== displayGameState.handNumber || record.street !== displayGameState.street) {
                 continue;
             }
 
@@ -399,11 +371,11 @@ export default function App() {
         }
 
         return latestActions;
-    }, [gameState.actionHistory, gameState.handNumber, gameState.street]);
+    }, [displayGameState.actionHistory, displayGameState.handNumber, displayGameState.street]);
     const highlightedCardKeys = useMemo(() => {
         const keys = new Set<string>();
 
-        for (const result of handResult?.playerResults ?? []) {
+        for (const result of displayHandResult?.playerResults ?? []) {
             if (!result.isWinner) {
                 continue;
             }
@@ -417,45 +389,52 @@ export default function App() {
     }, [handResult]);
 
     useLayoutEffect(() => {
-        if (latestStreetDealRecord === null) {
-            lastHandledDealIdRef.current = null;
-            lastFullyRevealedBoardLengthRef.current = gameState.board.length;
-
-            setStreetReveal((previous) =>
-                previous.active || previous.fromIndex !== gameState.board.length
-                    ? { active: false, fromIndex: gameState.board.length }
-                    : previous
-            );
-
-            return;
-        }
-
-        if (lastHandledDealIdRef.current === latestStreetDealRecord.id) {
-            return;
-        }
-
-        lastHandledDealIdRef.current = latestStreetDealRecord.id;
+        const previousGameState = lastDisplayedGameStateRef.current;
 
         if (revealTimerRef.current !== null) {
             window.clearTimeout(revealTimerRef.current);
             revealTimerRef.current = null;
         }
 
-        const fromIndex = lastFullyRevealedBoardLengthRef.current;
+        if (previousGameState === null) {
+            lastDisplayedGameStateRef.current = gameState;
+            setDisplayGameState(gameState);
+            setStreetReveal({ active: false, fromIndex: gameState.board.length });
+            return;
+        }
 
-        setStreetReveal({
-            active: true,
-            fromIndex,
-        });
+        const shouldStageStreetTransition =
+            previousGameState.street !== gameState.street &&
+            gameState.street !== "showdown" &&
+            gameState.street !== "hand_complete";
 
-        revealTimerRef.current = window.setTimeout(() => {
-            lastFullyRevealedBoardLengthRef.current = gameState.board.length;
+        if (shouldStageStreetTransition) {
+            setStreetReveal({
+                active: true,
+                fromIndex: previousGameState.board.length,
+            });
+            setDisplayGameState({
+                ...previousGameState,
+                actionHistory: gameState.actionHistory,
+            });
+
+            revealTimerRef.current = window.setTimeout(() => {
+                setDisplayGameState(gameState);
+                setStreetReveal({
+                    active: false,
+                    fromIndex: gameState.board.length,
+                });
+                revealTimerRef.current = null;
+            }, STREET_REVEAL_DELAY_MS);
+        } else {
+            setDisplayGameState(gameState);
             setStreetReveal({
                 active: false,
                 fromIndex: gameState.board.length,
             });
-            revealTimerRef.current = null;
-        }, STREET_REVEAL_DELAY_MS);
+        }
+
+        lastDisplayedGameStateRef.current = gameState;
 
         return () => {
             if (revealTimerRef.current !== null) {
@@ -463,7 +442,7 @@ export default function App() {
                 revealTimerRef.current = null;
             }
         };
-    }, [gameState.board.length, latestStreetDealRecord, gameState.handNumber, gameState.street]);
+    }, [gameState]);
 
     useEffect(() => {
         if (botTimerRef.current !== null) {
@@ -538,9 +517,6 @@ export default function App() {
     }
 
     const activePlayers = gameState.players.filter((player) => player.status !== "out");
-    const latestActionLabel = latestPlayerActionRecord
-        ? describeAction(latestPlayerActionRecord, gameState)
-        : null;
 
     return (
         <main className="app-shell">
@@ -565,18 +541,16 @@ export default function App() {
 
                 <div className="table-stage table-stage--demo">
                     <PokerTableScene
-                        players={gameState.players}
-                        board={gameState.board}
+                        players={displayGameState.players}
+                        board={displayGameState.board}
                         potLabel={centerPotLabel}
                         potAmount={centerPotAmount}
                         showVillainHoleCards={showVillainHoleCards}
-                        latestActionLabel={latestActionLabel}
-                        latestActionKey={latestPlayerActionRecord?.id ?? null}
                         visibleActionByPlayerId={visibleActionByPlayerId}
                         handResultByPlayerId={handResultByPlayerId}
                         highlightedCardKeys={highlightedCardKeys}
                         streetReveal={streetReveal}
-                        currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
+                        currentActorSeatIndex={displayGameState.betting.currentActorSeatIndex}
                     />
                 </div>
 

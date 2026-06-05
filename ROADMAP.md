@@ -11,6 +11,15 @@
 3. Replay or review of prior hands.
 4. Stats or training dashboard.
 
+## Table polish ideas
+- Winner / loser seat styling using showdown reveal data.
+- Hero / bot identity badges on each seat.
+- Latest-action callout, if we want a global table-level indicator again later.
+- Bot action staging with a visible seat chip, then a short pause before the next turn.
+- Community-card reveal staging with face-down deal first, then flip-up.
+- Fixed board slots in the center of the felt.
+- A dedicated deal area on the felt for community-card dealing visuals.
+
 ## Later / exploratory
 - AI analysis panel.
 - Stronger bot personas or strategy.

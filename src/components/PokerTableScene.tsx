@@ -19,8 +19,6 @@ type PokerTableSceneProps = {
   potLabel: string;
   potAmount: number;
   showVillainHoleCards: boolean;
-  latestActionLabel: string | null;
-  latestActionKey: string | null;
   visibleActionByPlayerId: Map<string, string>;
   handResultByPlayerId: Map<string, HandRevealPlayerResult>;
   highlightedCardKeys: Set<string>;
