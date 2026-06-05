@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { within } from "@testing-library/dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as engine from "./features/game-engine/engine";
@@ -176,6 +176,18 @@ function createActionChipState(): GameState {
   };
 }
 
+function createBlindRevealState(startHandImpl: typeof engine.startHand): GameState {
+  const started = startHandImpl(createSampleGameState(), { random: () => 0 });
+
+  return {
+    ...started,
+    betting: {
+      ...started.betting,
+      currentActorSeatIndex: null,
+    },
+  };
+}
+
 function createBoardHeaderState(): GameState {
   return {
     ...createActionChipState(),
@@ -238,7 +250,9 @@ describe("App", () => {
     ).toBeInTheDocument();
 
     const newHandButton = await screen.findByRole("button", { name: "Rebuy and start new hand" }, { timeout: 5000 });
-    newHandButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    act(() => {
+      newHandButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
 
     await waitFor(() => {
       expect(handStat).toHaveTextContent("2");
@@ -255,9 +269,11 @@ describe("App", () => {
       await screen.findByText("Hand complete. Rebuy the hero to continue.", {}, { timeout: 5000 })
     ).toBeInTheDocument();
 
-    screen.getByRole("button", { name: "Rebuy and start new hand" }).dispatchEvent(
-      new MouseEvent("click", { bubbles: true })
-    );
+    act(() => {
+      screen.getByRole("button", { name: "Rebuy and start new hand" }).dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("2");
@@ -268,19 +284,24 @@ describe("App", () => {
     );
   }, 10000);
 
-  it("shows the showdown pot without reveal styling", () => {
+  it("shows showdown winners, losers, and hand tooltips", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
 
     const { container } = render(<App />);
     const potPill = container.querySelector(".poker-table-scene__pot");
+    const winnerBanner = container.querySelector(".poker-table-scene__banner--winner");
+    const loserBanner = container.querySelector(".poker-table-scene__banner--loser");
 
     expect(potPill).not.toBeNull();
     expect(within(potPill as HTMLElement).getByText("Pot awarded")).toBeInTheDocument();
     expect(within(potPill as HTMLElement).getByText("25")).toBeInTheDocument();
-    expect(container.querySelector(".seat-card--winner")).toBeNull();
-    expect(container.querySelector(".seat-card--loser")).toBeNull();
-    expect(container.querySelector(".table-card--highlighted")).toBeNull();
-    expect(container.querySelector(".table-card--muted")).toBeNull();
+    expect(winnerBanner).not.toBeNull();
+    expect(loserBanner).not.toBeNull();
+    expect(container.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
+    expect(container.querySelectorAll(".table-card--highlighted").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".table-card--muted").length).toBeGreaterThan(0);
+    expect(within(winnerBanner as HTMLElement).getByText(/Straight/i)).toBeInTheDocument();
+    expect(within(loserBanner as HTMLElement).getByText(/Pair/i)).toBeInTheDocument();
   });
 
   it("shows recent seat action chips on the table", () => {
@@ -293,13 +314,21 @@ describe("App", () => {
     expect(screen.getByText("Check")).toBeInTheDocument();
   });
 
-  it("keeps the bot chip visible until the staged street advance completes", async () => {
-    vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
+  it("keeps blind chips visible through the end of preflop betting", async () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createBlindRevealState(realStartHand));
+
+    vi.useFakeTimers();
 
     const { container } = render(<App />);
 
+    await act(async () => {
+      vi.runAllTimers();
+    });
+
     expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
-    expect(screen.getByText("Check")).toBeInTheDocument();
+    expect(screen.getByText("Small blind $5")).toBeInTheDocument();
+    expect(screen.getByText("Big blind $10")).toBeInTheDocument();
   });
 
   it("renders the community cards directly without a face-down reveal", async () => {

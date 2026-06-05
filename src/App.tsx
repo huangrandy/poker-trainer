@@ -149,6 +149,16 @@ function buildBlindRevealActions(state: GameState): Array<{ playerId: string; la
         }));
 }
 
+function mergeActionLabels(primary: Map<string, string>, secondary: Map<string, string>): Map<string, string> {
+    const merged = new Map(primary);
+
+    for (const [playerId, label] of secondary) {
+        merged.set(playerId, label);
+    }
+
+    return merged;
+}
+
 function getSeatPosition(index: number, total: number): string {
     if (total <= 1) {
         return "seat-bottom";
@@ -357,6 +367,7 @@ function ActionButton({
 export default function App() {
     const [gameState, setGameState] = useState<GameState>(() => createInitialGameState());
     const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() => new Map());
+    const [blindActionLabels, setBlindActionLabels] = useState<Map<string, string>>(() => new Map());
     const [tableLocked, setTableLocked] = useState(true);
     const [streetReveal, setStreetReveal] = useState({
         active: false,
@@ -412,6 +423,13 @@ export default function App() {
         () => buildVisibleActionLabelsForStreet(gameState, gameState.street),
         [gameState.actionHistory, gameState.handNumber, gameState.street]
     );
+    const sceneActionLabels = useMemo(() => {
+        if (gameState.street !== "preflop") {
+            return tableActionLabels;
+        }
+
+        return mergeActionLabels(tableActionLabels, blindActionLabels);
+    }, [blindActionLabels, gameState.street, tableActionLabels]);
     const highlightedCardKeys = useMemo(() => {
         const keys = new Set<string>();
 
@@ -460,6 +478,7 @@ export default function App() {
             const blindRevealActions = buildBlindRevealActions(gameState);
             setTableLocked(true);
             setTableActionLabels(new Map());
+            setBlindActionLabels(new Map());
 
             if (blindRevealActions.length === 0) {
                 blindRevealActiveRef.current = false;
@@ -486,6 +505,9 @@ export default function App() {
                 if (revealIndex >= blindRevealActions.length - 1) {
                     blindRevealTimerRef.current = window.setTimeout(() => {
                         blindRevealActiveRef.current = false;
+                        setBlindActionLabels(
+                            new Map(blindRevealActions.map((entry) => [entry.playerId, entry.label]))
+                        );
                         setTableActionLabels(visibleActionByPlayerId);
                         setTableLocked(false);
                         blindRevealTimerRef.current = null;
@@ -521,10 +543,12 @@ export default function App() {
         }
 
         if (gameState.street === "showdown" || gameState.street === "hand_complete") {
+            setBlindActionLabels(new Map());
             setTableActionLabels(visibleActionByPlayerId);
             setTableLocked(false);
             setStreetReveal({ active: false, fromIndex: gameState.board.length });
         } else {
+            setBlindActionLabels(new Map());
             streetRevealActiveRef.current = true;
             const previousStreetActions = buildVisibleActionLabelsForStreet(gameState, previousStreet);
 
@@ -665,7 +689,7 @@ export default function App() {
                         potLabel={centerPotLabel}
                         potAmount={centerPotAmount}
                         showVillainHoleCards={showVillainHoleCards}
-                        visibleActionByPlayerId={tableActionLabels}
+                        visibleActionByPlayerId={sceneActionLabels}
                         handResultByPlayerId={handResultByPlayerId}
                         highlightedCardKeys={highlightedCardKeys}
                         streetReveal={streetReveal}

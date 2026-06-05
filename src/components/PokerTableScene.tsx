@@ -205,16 +205,24 @@ function formatCardLabel(rank: string, suit: string) {
   return `${rank}${getSuitSymbol(suit)}`;
 }
 
+function getCardKey(card: Card) {
+  return `${card.rank}:${card.suit}`;
+}
+
 function TableCard({
   rank,
   suit,
   style,
   isFaceDown = false,
+  isHighlighted = false,
+  isMuted = false,
 }: {
   rank: string;
   suit: string;
   style?: CSSProperties;
   isFaceDown?: boolean;
+  isHighlighted?: boolean;
+  isMuted?: boolean;
 }) {
   return (
     <span
@@ -223,6 +231,8 @@ function TableCard({
         "table-card",
         `table-card--${getSuitTone(suit)}`,
         isFaceDown ? "table-card--face-down" : "",
+        isHighlighted ? "table-card--highlighted" : "",
+        isMuted ? "table-card--muted" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -272,6 +282,8 @@ export function PokerTableScene({
   potAmount,
   showVillainHoleCards,
   visibleActionByPlayerId,
+  handResultByPlayerId,
+  highlightedCardKeys,
   streetReveal,
   currentActorSeatIndex,
 }: PokerTableSceneProps) {
@@ -366,6 +378,8 @@ export function PokerTableScene({
           {Array.from({ length: boardSlots }).map((_, index) => {
             const card = board[index];
             const isFaceDown = streetReveal.active && index >= streetReveal.fromIndex;
+            const isHighlighted = card ? highlightedCardKeys.has(getCardKey(card)) : false;
+            const isMuted = Boolean(card && showVillainHoleCards && highlightedCardKeys.size > 0 && !isHighlighted);
 
             return card ? (
               <TableCard
@@ -373,6 +387,8 @@ export function PokerTableScene({
                 rank={card.rank}
                 suit={card.suit}
                 isFaceDown={isFaceDown}
+                isHighlighted={isHighlighted}
+                isMuted={isMuted}
                 style={{
                   width: DESIGN.communityCardWidth * scale,
                   height: DESIGN.communityCardHeight * scale,
@@ -395,6 +411,8 @@ export function PokerTableScene({
         {seatPlacements.map((seat) => {
           const player = playerBySeatId.get(seat.id) ?? null;
           const isCurrentActor = player?.seatIndex === currentActorSeatIndex;
+          const revealResult = player ? handResultByPlayerId.get(player.id) ?? null : null;
+          const showRevealResult = Boolean(showVillainHoleCards && revealResult);
           const localRects = seatLocalRects[seat.layout.kind];
           const bannerRect = mirrorRect(
             localRects.banner,
@@ -418,6 +436,11 @@ export function PokerTableScene({
             seat.layout.flipY
           );
           const actionLabel = player ? visibleActionByPlayerId.get(player.id) ?? null : null;
+          const seatOutcomeClass = showRevealResult
+            ? revealResult?.isWinner
+              ? "poker-table-scene__banner--winner"
+              : "poker-table-scene__banner--loser"
+            : "";
 
           return (
             <article
@@ -458,6 +481,8 @@ export function PokerTableScene({
                       key={`${player.id}-${card.rank}-${card.suit}-${index}`}
                       rank={card.rank}
                       suit={card.suit}
+                      isHighlighted={showRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false}
+                      isMuted={showRevealResult ? !highlightedCardKeys.has(getCardKey(card)) : false}
                       style={{
                         width: DESIGN.cardWidth * scale,
                         height: DESIGN.cardHeight * scale,
@@ -487,7 +512,12 @@ export function PokerTableScene({
               ) : null}
 
               <div
-                className="poker-table-scene__banner"
+                className={[
+                  "poker-table-scene__banner",
+                  seatOutcomeClass,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 style={{
                   ...styles.seat,
                   left: bannerRect.left * scale,
@@ -503,8 +533,16 @@ export function PokerTableScene({
                       : styles.seat.background
                     : "linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.88))",
                   borderColor: player ? styles.seat.border : EMPTY_SEAT_BANNER_BORDER,
-                  opacity: player ? 1 : 0.55,
-                  filter: player ? "none" : "grayscale(0.35) brightness(0.82)",
+                  opacity: player
+                    ? showRevealResult && revealResult && !revealResult.isWinner
+                      ? 0.76
+                      : 1
+                    : 0.55,
+                  filter: player
+                    ? showRevealResult && revealResult && !revealResult.isWinner
+                      ? "grayscale(0.42) brightness(0.78)"
+                      : "none"
+                    : "grayscale(0.35) brightness(0.82)",
                   boxShadow: player
                     ? isCurrentActor
                       ? "0 0 0 1px rgba(250, 204, 21, 0.42), 0 0 32px rgba(250, 204, 21, 0.18)"
@@ -553,6 +591,29 @@ export function PokerTableScene({
                     {player ? `$${player.stack}` : "Empty seat"}
                   </div>
                 </div>
+                {showRevealResult && revealResult ? (
+                  <div
+                    className="poker-table-scene__hand-tooltip"
+                    tabIndex={0}
+                    aria-label={`${player?.name ?? seat.label} hand: ${revealResult.handLabel}`}
+                    style={{
+                      top: 10 * scale,
+                      right: 10 * scale,
+                      fontSize: `${11 * scale}px`,
+                    }}
+                  >
+                    <span className="poker-table-scene__hand-tooltip-label">Hand</span>
+                    <div
+                      className="poker-table-scene__hand-tooltip-content"
+                      style={{
+                        width: 176 * scale,
+                        fontSize: `${11 * scale}px`,
+                      }}
+                    >
+                      {revealResult.handLabel}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </article>
           );
