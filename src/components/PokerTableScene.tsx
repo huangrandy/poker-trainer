@@ -473,7 +473,7 @@ export function PokerTableScene({
                     const cardsWidth = holeCardWidth * 2 + DESIGN.cardGap;
                     const cardsRect = {
                         left: bannerRect.left + (bannerRect.width - cardsWidth) / 2,
-                        top: bannerRect.top - holeCardHeight + 24,
+                        top: bannerRect.top - holeCardHeight + 28,
                         width: cardsWidth,
                         height: holeCardHeight,
                     };
