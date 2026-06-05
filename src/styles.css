@@ -260,10 +260,8 @@ textarea {
 }
 
 .table-card--highlighted {
-    box-shadow:
-        0 0 0 2px rgba(125, 211, 252, 0.55),
-        0 18px 28px rgba(15, 23, 42, 0.34);
-    transform: translateY(-1px);
+    box-shadow: 0 14px 24px rgba(15, 23, 42, 0.28);
+    transform: none;
 }
 
 .table-card--muted {
@@ -388,12 +386,6 @@ textarea {
     top: 50%;
     left: -12px;
     transform: translate(-100%, -50%);
-}
-
-.poker-table-scene__banner--winner {
-    box-shadow:
-        0 0 0 1px rgba(34, 197, 94, 0.42),
-        0 0 36px rgba(34, 197, 94, 0.16);
 }
 
 .poker-table-scene__banner--loser {
