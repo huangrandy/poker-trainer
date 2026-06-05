@@ -59,7 +59,7 @@ const DESIGN = {
     seatWidth: 328,
     seatHeight: 132,
     cardWidth: 100,
-    cardHeight: 128,
+    cardHeight: 134,
     cardGap: 16,
     communityCardGap: 20,
 } as const;
@@ -227,6 +227,8 @@ function TableCard({
     isHighlighted?: boolean;
     isMuted?: boolean;
 }) {
+    const cardRadius = 10 * scale;
+
     return (
         <span
             aria-label={formatCardLabel(rank, suit)}
@@ -239,7 +241,7 @@ function TableCard({
             ]
                 .filter(Boolean)
                 .join(" ")}
-            style={style}
+            style={{ ...style, "--card-radius": `${cardRadius}px` } as CSSProperties}
         >
             <span className="table-card__inner">
                 <span className="table-card__face table-card__face--front">
@@ -411,7 +413,6 @@ export function PokerTableScene({
                                     style={{
                                         width: DESIGN.cardWidth * scale,
                                         height: DESIGN.cardHeight * scale,
-                                        borderRadius: "12px",
                                     }}
                                     scale={scale}
                                 />
@@ -537,7 +538,6 @@ export function PokerTableScene({
                                             style={{
                                                 width: holeCardWidth * scale,
                                                 height: holeCardHeight * scale,
-                                                borderRadius: "12px",
                                             }}
                                             scale={scale}
                                         />
