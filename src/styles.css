@@ -884,6 +884,12 @@ textarea {
     gap: 10px;
 }
 
+.debug-panel__player-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
 .debug-panel__player-name {
     margin-top: 0;
     font-weight: 600;
@@ -908,9 +914,83 @@ textarea {
     color: #cbd5e1;
 }
 
+.debug-panel__cards {
+    display: grid;
+    gap: 10px;
+}
+
+.debug-card-picker {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: rgba(3, 7, 18, 0.42);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.debug-card-picker__title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    color: #f8fafc;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.debug-card-picker__title small {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.debug-card-picker__controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.debug-card-picker__control {
+    display: grid;
+    gap: 6px;
+}
+
+.debug-card-picker__control span {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
 .debug-panel__note {
     margin: 0;
     line-height: 1.4;
+}
+
+.debug-panel__rebuy-button,
+.debug-panel__reset-button {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 999px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition:
+        transform 120ms ease,
+        box-shadow 120ms ease,
+        background 120ms ease;
+    background: rgba(148, 163, 184, 0.14);
+    color: #f8fafc;
+    font-weight: 600;
+}
+
+.debug-panel__rebuy-button:hover,
+.debug-panel__reset-button:hover {
+    transform: translateY(-1px);
+}
+
+.debug-panel__reset-button {
+    background: linear-gradient(135deg, #f59e0b, #fb7185);
+    color: #04111f;
+    box-shadow: 0 16px 32px rgba(251, 113, 133, 0.16);
 }
 
 .action-row {
@@ -1113,6 +1193,10 @@ textarea {
     .table-card {
         width: 48px;
         height: 68px;
+    }
+
+    .debug-card-picker__controls {
+        grid-template-columns: 1fr;
     }
 
     .seat-top {

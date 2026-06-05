@@ -567,6 +567,29 @@ describe("App", () => {
     });
   });
 
+  it("resets the game back to hand one", () => {
+    window.localStorage.setItem(
+      GAME_STATE_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        gameState: createShowdownRevealState(),
+      })
+    );
+
+    render(<App />);
+
+    expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("3");
+
+    act(() => {
+      screen.getByRole("button", { name: "Reset game" }).dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+
+    expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("1");
+    expect(screen.queryByText("Hand 3")).not.toBeInTheDocument();
+  });
+
   it("replays an all-in runout one street at a time", async () => {
     const realApplyAction = engine.applyAction;
     const setupState = createPreflopAllInRunoutRevealState();

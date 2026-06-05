@@ -725,7 +725,7 @@ function createActionRecord(state: GameState, action: PlayerAction): ActionRecor
 function isBettingRoundSettled(state: GameState): boolean {
   const activePlayers = state.players.filter((player) => player.status === "active");
 
-  if (activePlayers.length <= 1) {
+  if (activePlayers.length === 0) {
     return true;
   }
 
@@ -744,11 +744,11 @@ function finalizeTurn(state: GameState): GameState {
     return settleHandPot(nextState);
   }
 
-  if (activePlayers.length === 0) {
-    return runOutBoardAndFinishHand(nextState);
-  }
-
   if (isBettingRoundSettled(nextState)) {
+    if (activePlayers.length <= 1 && nextState.players.some((player) => player.status === "all_in")) {
+      return runOutBoardAndFinishHand(nextState);
+    }
+
     const nextStreet = getNextStreet(nextState.street);
 
     if (nextStreet === "showdown") {

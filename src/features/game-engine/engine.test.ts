@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyAction, getLegalActions, rebuyPlayer, startHand, startNextHand } from "./engine";
 import { createSampleGameState } from "./fixtures";
+import { createStandardDeck } from "../../lib/poker/deck";
 import type { Card, GameState, PlayerState } from "./types";
 
 function makeCard(rank: Card["rank"], suit: Card["suit"]): Card {
@@ -234,6 +235,86 @@ describe("engine basics", () => {
     expect(finished.street).toBe("hand_complete");
     expect(finished.board).toHaveLength(5);
     expect(finished.betting.currentActorSeatIndex).toBeNull();
+  });
+
+  it("runs out the board after a preflop shove is called heads-up", () => {
+    const preflopState: GameState = {
+      config: {
+        blinds: {
+          smallBlind: 5,
+          bigBlind: 10,
+          ante: 0,
+        },
+        startingStack: 1000,
+        maxPlayers: 6,
+      },
+      handNumber: 23,
+      street: "preflop",
+      dealerSeatIndex: 0,
+      buttonSeatIndex: 0,
+      board: [],
+      deck: createStandardDeck(),
+      players: [
+        {
+          id: "hero",
+          name: "Hero",
+          seatIndex: 0,
+          isHero: true,
+          isBot: false,
+          stack: 500,
+          holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 5,
+          totalCommittedThisHand: 5,
+          status: "active",
+          hasActedThisStreet: false,
+        },
+        {
+          id: "bot-1",
+          name: "Bot 1",
+          seatIndex: 1,
+          isHero: false,
+          isBot: true,
+          botPersonaId: "tag",
+          stack: 490,
+          holeCards: [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+          currentStreetBet: 10,
+          totalCommittedThisHand: 10,
+          status: "active",
+          hasActedThisStreet: false,
+        },
+      ],
+      betting: {
+        currentBet: 10,
+        minRaiseTo: 20,
+        lastAggressorSeatIndex: 1,
+        currentActorSeatIndex: 0,
+      },
+      pot: {
+        mainPot: 15,
+        sidePots: [],
+      },
+      actionHistory: [],
+      lastHandResult: null,
+    };
+
+    const afterHeroShove = applyAction(preflopState, {
+      type: "all_in",
+      playerId: "hero",
+    });
+
+    expect(afterHeroShove.street).toBe("preflop");
+    expect(afterHeroShove.betting.currentActorSeatIndex).toBe(1);
+
+    const finished = applyAction(afterHeroShove, {
+      type: "call",
+      playerId: "bot-1",
+    });
+
+    expect(finished.street).toBe("hand_complete");
+    expect(finished.board).toHaveLength(5);
+    expect(finished.betting.currentActorSeatIndex).toBeNull();
+    expect(finished.actionHistory.map((record) => record.type)).toContain("showdown");
+    expect(finished.actionHistory.map((record) => record.type)).not.toContain("deal_next_street");
   });
 
   it("ends the hand when a player folds heads-up", () => {

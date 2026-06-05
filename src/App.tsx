@@ -273,6 +273,27 @@ function getRunoutRevealTargets(previousStreet: GameState["street"]): number[] {
     return [];
 }
 
+function clearRevealTimers(
+    botTimerRef: { current: number | null },
+    blindRevealTimerRef: { current: number | null },
+    revealTimerRef: { current: number | null }
+): void {
+    if (botTimerRef.current !== null) {
+        window.clearTimeout(botTimerRef.current);
+        botTimerRef.current = null;
+    }
+
+    if (blindRevealTimerRef.current !== null) {
+        window.clearTimeout(blindRevealTimerRef.current);
+        blindRevealTimerRef.current = null;
+    }
+
+    if (revealTimerRef.current !== null) {
+        window.clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = null;
+    }
+}
+
 function createInitialGameState(): GameState {
     return startHand(createSampleGameState());
 }
@@ -496,7 +517,7 @@ function SeatCard({
         .join(" ");
 
     return (
-        <article className={seatClasses}>
+        <article className={seatClasses} data-player-id={player.id}>
             {actionLabel ? (
                 <div className={`seat-card__action seat-card__action--${actionPlacement}`}>{actionLabel}</div>
             ) : null}
@@ -1050,6 +1071,28 @@ export default function App() {
         }));
     }
 
+    function handleRebuyPlayer(playerId: string) {
+        setGameState((previous) => rebuyPlayer(previous, playerId));
+    }
+
+    function handleResetGame() {
+        clearRevealTimers(botTimerRef, blindRevealTimerRef, revealTimerRef);
+        blindRevealActiveRef.current = false;
+        streetRevealActiveRef.current = false;
+        lastHandledStartHandIdRef.current = null;
+        lastStreetRef.current = "not_started";
+        lastBoardLengthRef.current = 0;
+        setRaiseDraft(null);
+        setTableActionLabels(new Map());
+        setBlindActionLabels(new Map());
+        setTableLocked(true);
+        setStreetReveal({
+            active: false,
+            fromIndex: 0,
+        });
+        setGameState(createInitialGameState());
+    }
+
     function handleStepBotOnce() {
         if (botAutoplayEnabled) {
             return;
@@ -1267,6 +1310,8 @@ export default function App() {
                         onToggleRevealAllCards={() => setDebugRevealAllCards((previous) => !previous)}
                         onToggleBotAutoplay={() => setBotAutoplayEnabled((previous) => !previous)}
                         onStepBot={handleStepBotOnce}
+                        onRebuyPlayer={handleRebuyPlayer}
+                        onResetGame={handleResetGame}
                         onPlayerPersonaChange={handlePlayerPersonaChange}
                         onPlayerHoleCardsChange={handlePlayerHoleCardsChange}
                     />
