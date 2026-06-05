@@ -57,6 +57,13 @@ type SeatActionPlacement = "top" | "bottom" | "left" | "right";
 const BLIND_REVEAL_DELAY_MS = 500;
 const BOT_ACTION_DELAY_MS = 500;
 const STREET_REVEAL_DELAY_MS = 500;
+const GAME_STATE_STORAGE_KEY = "poker-trainer:game-state";
+const GAME_STATE_STORAGE_VERSION = 1;
+
+type PersistedGameState = {
+    version: number;
+    gameState: GameState;
+};
 
 function getSeatActionPlacement(positionClass: string): SeatActionPlacement {
     if (positionClass === "seat-top") {
@@ -198,6 +205,156 @@ function getLegalActionLabel(action: LegalAction): string {
 
 function createInitialGameState(): GameState {
     return startHand(createSampleGameState());
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCard(value: unknown): value is Card {
+    return (
+        isPlainObject(value) &&
+        typeof value.rank === "string" &&
+        typeof value.suit === "string"
+    );
+}
+
+function isPlayerState(value: unknown): value is PlayerState {
+    return (
+        isPlainObject(value) &&
+        typeof value.id === "string" &&
+        typeof value.name === "string" &&
+        typeof value.seatIndex === "number" &&
+        typeof value.isHero === "boolean" &&
+        typeof value.isBot === "boolean" &&
+        typeof value.stack === "number" &&
+        Array.isArray(value.holeCards) &&
+        value.holeCards.every(isCard) &&
+        typeof value.currentStreetBet === "number" &&
+        typeof value.totalCommittedThisHand === "number" &&
+        typeof value.status === "string" &&
+        typeof value.hasActedThisStreet === "boolean"
+    );
+}
+
+function isHandRevealPlayerResult(value: unknown): value is HandRevealPlayerResult {
+    return (
+        isPlainObject(value) &&
+        typeof value.playerId === "string" &&
+        typeof value.seatIndex === "number" &&
+        typeof value.name === "string" &&
+        typeof value.isWinner === "boolean" &&
+        typeof value.handLabel === "string" &&
+        Array.isArray(value.cardsUsed) &&
+        value.cardsUsed.every(isCard)
+    );
+}
+
+function isGameState(value: unknown): value is GameState {
+    const gameRecord = isPlainObject(value) ? value : null;
+    const configRecord = gameRecord && isPlainObject(gameRecord.config) ? gameRecord.config : null;
+    const blindsRecord = configRecord && isPlainObject(configRecord.blinds) ? configRecord.blinds : null;
+    const deckRecord = gameRecord && isPlainObject(gameRecord.deck) ? gameRecord.deck : null;
+    const bettingRecord = gameRecord && isPlainObject(gameRecord.betting) ? gameRecord.betting : null;
+    const potRecord = gameRecord && isPlainObject(gameRecord.pot) ? gameRecord.pot : null;
+    const lastHandResultRecord = gameRecord ? gameRecord.lastHandResult : null;
+    const dealerSeatIndexOk =
+        gameRecord !== null &&
+        (typeof gameRecord.dealerSeatIndex === "number" || gameRecord.dealerSeatIndex === null);
+    const buttonSeatIndexOk =
+        gameRecord !== null &&
+        (typeof gameRecord.buttonSeatIndex === "number" || gameRecord.buttonSeatIndex === null);
+
+    return (
+        gameRecord !== null &&
+        configRecord !== null &&
+        blindsRecord !== null &&
+        deckRecord !== null &&
+        bettingRecord !== null &&
+        potRecord !== null &&
+        typeof configRecord.startingStack === "number" &&
+        typeof configRecord.maxPlayers === "number" &&
+        typeof blindsRecord.smallBlind === "number" &&
+        typeof blindsRecord.bigBlind === "number" &&
+        typeof blindsRecord.ante === "number" &&
+        typeof gameRecord.handNumber === "number" &&
+        typeof gameRecord.street === "string" &&
+        dealerSeatIndexOk &&
+        buttonSeatIndexOk &&
+        Array.isArray(gameRecord.players) &&
+        gameRecord.players.every(isPlayerState) &&
+        Array.isArray(gameRecord.board) &&
+        gameRecord.board.every(isCard) &&
+        Array.isArray(deckRecord.cards) &&
+        deckRecord.cards.every(isCard) &&
+        typeof bettingRecord.currentBet === "number" &&
+        typeof bettingRecord.minRaiseTo === "number" &&
+        (typeof bettingRecord.lastAggressorSeatIndex === "number" || bettingRecord.lastAggressorSeatIndex === null) &&
+        (typeof bettingRecord.currentActorSeatIndex === "number" || bettingRecord.currentActorSeatIndex === null) &&
+        typeof potRecord.mainPot === "number" &&
+        Array.isArray(potRecord.sidePots) &&
+        Array.isArray(gameRecord.actionHistory) &&
+        gameRecord.actionHistory.every((record) => {
+            return (
+                isPlainObject(record) &&
+                typeof record.id === "string" &&
+                typeof record.type === "string" &&
+                (typeof record.playerId === "string" || record.playerId === null) &&
+                typeof record.street === "string" &&
+                typeof record.handNumber === "number" &&
+                typeof record.timestampMs === "number"
+            );
+        }) &&
+        (lastHandResultRecord === null || isPlainObject(lastHandResultRecord)) &&
+        (lastHandResultRecord === null ||
+            (typeof lastHandResultRecord.kind === "string" &&
+                typeof lastHandResultRecord.potAwarded === "number" &&
+                Array.isArray(lastHandResultRecord.winnerIds) &&
+                lastHandResultRecord.winnerIds.every((winnerId: unknown) => typeof winnerId === "string") &&
+                Array.isArray(lastHandResultRecord.playerResults) &&
+                lastHandResultRecord.playerResults.every(isHandRevealPlayerResult)))
+    );
+}
+
+function loadPersistedGameState(): GameState | null {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
+    const serializedState = window.localStorage.getItem(GAME_STATE_STORAGE_KEY);
+
+    if (!serializedState) {
+        return null;
+    }
+
+    try {
+        const parsedState: unknown = JSON.parse(serializedState);
+
+        if (!isPlainObject(parsedState) || parsedState.version !== GAME_STATE_STORAGE_VERSION) {
+            return null;
+        }
+
+        if (!isGameState(parsedState.gameState)) {
+            return null;
+        }
+
+        return parsedState.gameState;
+    } catch {
+        return null;
+    }
+}
+
+function savePersistedGameState(gameState: GameState): void {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    const payload: PersistedGameState = {
+        version: GAME_STATE_STORAGE_VERSION,
+        gameState,
+    };
+
+    window.localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(payload));
 }
 
 function TableCard({
@@ -365,7 +522,7 @@ function ActionButton({
 }
 
 export default function App() {
-    const [gameState, setGameState] = useState<GameState>(() => createInitialGameState());
+    const [gameState, setGameState] = useState<GameState>(() => loadPersistedGameState() ?? createInitialGameState());
     const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() => new Map());
     const [blindActionLabels, setBlindActionLabels] = useState<Map<string, string>>(() => new Map());
     const [tableLocked, setTableLocked] = useState(true);
@@ -445,6 +602,10 @@ export default function App() {
 
         return keys;
     }, [handResult]);
+
+    useEffect(() => {
+        savePersistedGameState(gameState);
+    }, [gameState]);
 
     useEffect(() => {
         if (tableLocked) {

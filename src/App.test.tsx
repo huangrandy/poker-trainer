@@ -10,7 +10,10 @@ import App from "./App";
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  window.localStorage.clear();
 });
+
+const GAME_STATE_STORAGE_KEY = "poker-trainer:game-state";
 
 function createBustedHeroState(startHandImpl: typeof engine.startHand): GameState {
   const started = startHandImpl(createSampleGameState(), { random: () => 0 });
@@ -304,6 +307,36 @@ describe("App", () => {
     expect(within(loserBanner as HTMLElement).getByText(/Pair/i)).toBeInTheDocument();
   });
 
+  it("restores a saved game state from local storage", () => {
+    window.localStorage.setItem(
+      GAME_STATE_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        gameState: createShowdownRevealState(),
+      })
+    );
+
+    const { container } = render(<App />);
+
+    expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("3");
+    expect(screen.getByText("Street", { exact: true }).parentElement).toHaveTextContent("hand_complete");
+    expect(within(container.querySelector(".poker-table-scene__pot") as HTMLElement).getByText("Pot awarded")).toBeInTheDocument();
+    expect(container.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
+  });
+
+  it("falls back to a fresh game when saved state is invalid", () => {
+    window.localStorage.setItem(GAME_STATE_STORAGE_KEY, "{\"version\":1,\"gameState\":null}");
+
+    render(<App />);
+
+    expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Street", { exact: true }).parentElement).toHaveTextContent("preflop");
+
+    const savedSnapshot = JSON.parse(window.localStorage.getItem(GAME_STATE_STORAGE_KEY) ?? "null");
+    expect(savedSnapshot.version).toBe(1);
+    expect(savedSnapshot.gameState.handNumber).toBe(1);
+  });
+
   it("shows recent seat action chips on the table", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
 
@@ -327,8 +360,7 @@ describe("App", () => {
     });
 
     expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
-    expect(screen.getByText("Small blind $5")).toBeInTheDocument();
-    expect(screen.getByText("Big blind $10")).toBeInTheDocument();
+    expect(screen.getByText("BB $10")).toBeInTheDocument();
   });
 
   it("renders the community cards directly without a face-down reveal", async () => {
