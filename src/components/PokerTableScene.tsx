@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, RefObject } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
     Card,
     HandRevealPlayerResult,
@@ -291,12 +291,24 @@ export function PokerTableScene({
     currentActorSeatIndex,
 }: PokerTableSceneProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const potRef = useRef<HTMLDivElement>(null);
     const scale = useMeasuredScale(containerRef);
+    const [measuredPotHeight, setMeasuredPotHeight] = useState(0);
     const boardWidth = DESIGN.width * scale;
     const boardHeight = DESIGN.height * scale;
     const tableWidth = DESIGN.tableWidth * scale;
     const tableHeight = DESIGN.tableHeight * scale;
     const playerBySeatId = useMemo(() => buildSeatOccupants(players), [players]);
+
+    useLayoutEffect(() => {
+        const node = potRef.current;
+
+        if (!node) {
+            return;
+        }
+
+        setMeasuredPotHeight(node.getBoundingClientRect().height);
+    }, [potAmount, potLabel, scale]);
 
     const seatPlacements = useMemo(() => {
         return SEATS.map((seat) => {
@@ -316,6 +328,7 @@ export function PokerTableScene({
     const boardSlots = 5;
     const boardCardsWidth =
         boardSlots * DESIGN.cardWidth + (boardSlots - 1) * DESIGN.communityCardGap;
+    const centerStackGap = 20 * scale;
 
     return (
         <div
@@ -353,69 +366,80 @@ export function PokerTableScene({
                 </div>
 
                 <div
-                    className="poker-table-scene__pot"
+                    className="poker-table-scene__center-stack"
                     style={{
-                        ...styles.pot,
-                        top: 314 * scale,
-                        minWidth: 72 * scale,
-                        padding: `${14 * scale}px ${26 * scale}px`,
+                        ...styles.centerStack,
+                        left: "50%",
+                        top: boardHeight / 2,
                     }}
                 >
-                    <span style={{ ...styles.potLabel, fontSize: `${11 * scale}px` }}>
-                        {potLabel}
-                    </span>
-                    <span style={{ ...styles.potValue, fontSize: `${44 * scale}px` }}>
-                        ${potAmount}
-                    </span>
-                </div>
+                    <div
+                        className="poker-table-scene__community"
+                        style={{
+                            ...styles.communityRow,
+                            gap: 18 * scale,
+                            width: boardCardsWidth * scale,
+                        }}
+                    >
+                        {Array.from({ length: boardSlots }).map((_, index) => {
+                            const card = board[index];
+                            const isFaceDown = streetReveal.active && index >= streetReveal.fromIndex;
+                            const isHighlighted =
+                                card && showHandRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false;
+                            const isMuted = Boolean(
+                                card &&
+                                showHandRevealResult &&
+                                showVillainHoleCards &&
+                                highlightedCardKeys.size > 0 &&
+                                !isHighlighted
+                            );
 
-                <div
-                    className="poker-table-scene__community"
-                    style={{
-                        ...styles.communityRow,
-                        top: 438 * scale,
-                        gap: 18 * scale,
-                        width: boardCardsWidth * scale,
-                    }}
-                >
-                    {Array.from({ length: boardSlots }).map((_, index) => {
-                        const card = board[index];
-                        const isFaceDown = streetReveal.active && index >= streetReveal.fromIndex;
-                        const isHighlighted =
-                            card && showHandRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false;
-                        const isMuted = Boolean(
-                            card &&
-                            showHandRevealResult &&
-                            showVillainHoleCards &&
-                            highlightedCardKeys.size > 0 &&
-                            !isHighlighted
-                        );
+                            return card ? (
+                                <TableCard
+                                    key={`${card.rank}-${card.suit}-${index}`}
+                                    rank={card.rank}
+                                    suit={card.suit}
+                                    isFaceDown={isFaceDown}
+                                    isHighlighted={isHighlighted}
+                                    isMuted={isMuted}
+                                    style={{
+                                        width: DESIGN.cardWidth * scale,
+                                        height: DESIGN.cardHeight * scale,
+                                        borderRadius: "12px",
+                                    }}
+                                />
+                            ) : (
+                                <div
+                                    key={`community-empty-${index}`}
+                                    style={{
+                                        ...styles.communityCard,
+                                        width: DESIGN.cardWidth * scale,
+                                        height: DESIGN.cardHeight * scale,
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
 
-                        return card ? (
-                            <TableCard
-                                key={`${card.rank}-${card.suit}-${index}`}
-                                rank={card.rank}
-                                suit={card.suit}
-                                isFaceDown={isFaceDown}
-                                isHighlighted={isHighlighted}
-                                isMuted={isMuted}
-                                style={{
-                                    width: DESIGN.cardWidth * scale,
-                                    height: DESIGN.cardHeight * scale,
-                                    borderRadius: "12px",
-                                }}
-                            />
-                        ) : (
-                            <div
-                                key={`community-empty-${index}`}
-                                style={{
-                                    ...styles.communityCard,
-                                    width: DESIGN.cardWidth * scale,
-                                    height: DESIGN.cardHeight * scale,
-                                }}
-                            />
-                        );
-                    })}
+                    <div
+                        ref={potRef}
+                        className="poker-table-scene__pot"
+                        style={{
+                            ...styles.pot,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            top: -(measuredPotHeight || 85 * scale) - centerStackGap,
+                            minWidth: 72 * scale,
+                            padding: `${14 * scale}px ${26 * scale}px`,
+                        }}
+                    >
+                        <span style={{ ...styles.potLabel, fontSize: `${11 * scale}px` }}>
+                            {potLabel}
+                        </span>
+                        <span style={{ ...styles.potValue, fontSize: `${44 * scale}px` }}>
+                            ${potAmount}
+                        </span>
+                    </div>
                 </div>
 
                 {seatPlacements.map((seat) => {
@@ -698,8 +722,6 @@ const styles = {
     },
     pot: {
         position: "absolute" as const,
-        left: "50%",
-        transform: "translateX(-50%)",
         borderRadius: "18px",
         background: "rgba(0,0,0,0.22)",
         border: "1px solid rgba(255,255,255,0.08)",
@@ -721,12 +743,17 @@ const styles = {
         fontWeight: 700,
         lineHeight: 1,
     },
-    communityRow: {
+    centerStack: {
         position: "absolute" as const,
-        left: "50%",
-        transform: "translateX(-50%)",
-        display: "flex",
+        transform: "translate(-50%, -50%)",
+        display: "inline-block",
+        width: "fit-content",
+        height: "fit-content",
         zIndex: 2,
+        overflow: "visible",
+    },
+    communityRow: {
+        display: "flex",
         padding: 0,
         minHeight: 0,
         alignItems: "center",
