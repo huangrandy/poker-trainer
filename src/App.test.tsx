@@ -14,6 +14,7 @@ afterEach(() => {
 });
 
 const GAME_STATE_STORAGE_KEY = "poker-trainer:game-state";
+const DEBUG_SETTINGS_STORAGE_KEY = "poker-trainer:debug-settings";
 
 function createBustedHeroState(startHandImpl: typeof engine.startHand): GameState {
   const started = startHandImpl(createSampleGameState(), { random: () => 0 });
@@ -455,7 +456,7 @@ describe("App", () => {
 
     expect(potPill).not.toBeNull();
     expect(within(potPill as HTMLElement).getByText("Pot awarded")).toBeInTheDocument();
-    expect(within(potPill as HTMLElement).getByText("25")).toBeInTheDocument();
+    expect(potPill).toHaveTextContent("25");
     expect(winnerBanner).not.toBeNull();
     expect(loserBanner).not.toBeNull();
     expect(container.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
@@ -506,6 +507,24 @@ describe("App", () => {
     expect(screen.getByText("$10")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fold" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Call $5" })).toBeEnabled();
+  });
+
+  it("restores saved debug settings on reload", () => {
+    window.localStorage.setItem(
+      DEBUG_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        revealAllCards: true,
+        botAutoplayEnabled: false,
+      })
+    );
+
+    render(<App />);
+
+    expect(screen.getByRole("checkbox", { name: "Reveal cards" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Bot autoplay" })).not.toBeChecked();
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Step bot once" })).toBeDisabled();
   });
 
   it("falls back to a fresh game when saved state is invalid", () => {
@@ -682,6 +701,52 @@ describe("App", () => {
 
     expect(actionStrip).not.toBeNull();
     expect(within(actionStrip as HTMLElement).getByRole("button", { name: "Fold" })).toBeInTheDocument();
+  });
+
+  it("sends the current hand snapshot to the coach server and renders the reply", async () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createPlayablePreflopState(realStartHand));
+
+    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          sessionId: "thread-abc123",
+          text: "Three-bet AKs for value.",
+          summary: "Value 3-bet.",
+          recommendedAction: "raise",
+          confidence: "high",
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        }
+      ) as Response
+    );
+
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Ask coach" }));
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    const [requestUrl, requestInit] = fetchSpy.mock.calls[0] ?? [];
+    expect(requestUrl).toBe("http://127.0.0.1:8787/api/coach");
+
+    const parsedBody = JSON.parse(String(requestInit?.body));
+    expect(parsedBody.prompt).toBe("What is the best play here?");
+    expect(parsedBody.sessionId).toBeNull();
+    expect(parsedBody.snapshot.handNumber).toBe(1);
+    expect(parsedBody.snapshot.heroPlayerId).toBe("hero");
+
+    expect(await screen.findByText("Three-bet AKs for value.")).toBeInTheDocument();
+    expect(screen.getByText("Thread thread-abc12")).toBeInTheDocument();
   });
 
   it("opens a raise tray and confirms a sized raise", async () => {

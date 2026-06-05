@@ -31,9 +31,28 @@ function normalizeCoachPayload(parsed, request) {
   };
 }
 
+function normalizePlainCoachPayload(text, request) {
+  const normalizedText = typeof text === "string" ? text.trim() : "";
+
+  if (!normalizedText) {
+    throw new Error("Codex returned an empty coach response.");
+  }
+
+  return {
+    ok: true,
+    sessionId: request.sessionId ?? null,
+    text: normalizedText,
+    summary: normalizedText.length <= 140 ? normalizedText : `${normalizedText.slice(0, 137)}...`,
+    recommendedAction: null,
+    confidence: null,
+  };
+}
+
 function runCodexExec({
   command,
   model,
+  reasoningEffort,
+  structuredOutput,
   args,
   prompt,
   outputFile,
@@ -47,6 +66,8 @@ function runCodexExec({
     trace?.info("codex.spawn", {
       command,
       model: model ?? "default",
+      reasoningEffort: reasoningEffort ?? "default",
+      structuredOutput,
       cwd,
       outputFile,
       args,
@@ -125,6 +146,8 @@ function runCodexExec({
 export function createCodexCoachAdapter({
   command = "codex",
   model = null,
+  reasoningEffort = "low",
+  structuredOutput = true,
   timeoutMs = 120000,
   cwd = process.cwd(),
   spawnImpl = spawn,
@@ -143,31 +166,46 @@ export function createCodexCoachAdapter({
       tempDir,
       outputFile,
       model: model ?? "default",
+      reasoningEffort,
+      structuredOutput,
     });
 
     try {
       const raw = await runCodexExec({
         command,
+        model,
+        reasoningEffort,
+        structuredOutput,
         args: [
           "-a",
           "never",
           "-s",
           "read-only",
+          ...(reasoningEffort ? ["-c", `model_reasoning_effort=${reasoningEffort}`] : []),
           ...(model ? ["-m", model] : []),
           "exec",
           "--skip-git-repo-check",
-          "--output-schema",
-          schemaPath,
+          ...(structuredOutput
+            ? ["--output-schema", schemaPath]
+            : []),
           "--output-last-message",
           outputFile,
         ],
-        prompt: [
-          prompt,
-          "",
-          "Return only valid JSON that matches the provided output schema.",
-          "Do not use markdown fences.",
-          "Do not explain your reasoning outside the JSON payload.",
-        ].join("\n"),
+        prompt: structuredOutput
+          ? [
+              prompt,
+              "",
+              "Return only valid JSON that matches the provided output schema.",
+              "Do not use markdown fences.",
+              "Do not explain your reasoning outside the JSON payload.",
+            ].join("\n")
+          : [
+              prompt,
+              "",
+              "Return a concise plain-text answer.",
+              "Do not use markdown fences.",
+              "Do not return JSON.",
+            ].join("\n"),
         outputFile,
         timeoutMs,
         cwd,
@@ -179,12 +217,17 @@ export function createCodexCoachAdapter({
       trace?.info("codex.parse.start", {
         raw,
       });
-      const parsed = JSON.parse(raw);
-      trace?.info("codex.parse.ok", {
-        keys: Object.keys(parsed),
-      });
+      const normalized = structuredOutput
+        ? (() => {
+            const parsed = JSON.parse(raw);
+            trace?.info("codex.parse.ok", {
+              keys: Object.keys(parsed),
+            });
 
-      const normalized = normalizeCoachPayload(parsed, request);
+            return normalizeCoachPayload(parsed, request);
+          })()
+        : normalizePlainCoachPayload(raw, request);
+
       trace?.info("codex.adapter.done", normalized);
       return normalized;
     } finally {

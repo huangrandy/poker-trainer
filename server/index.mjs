@@ -110,6 +110,8 @@ function validateCoachRequest(value) {
 function jsonResponse(res, statusCode, body) {
   res.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
+    "access-control-allow-origin": "*",
+    "access-control-allow-headers": "content-type",
   });
   res.end(JSON.stringify(body));
 }
@@ -117,6 +119,7 @@ function jsonResponse(res, statusCode, body) {
 function htmlResponse(res, statusCode, body) {
   res.writeHead(statusCode, {
     "content-type": "text/html; charset=utf-8",
+    "access-control-allow-origin": "*",
   });
   res.end(body);
 }
@@ -130,28 +133,84 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function renderLogPage(entries, filePath) {
-  const rows = entries
-    .map((entry) => {
-      const details = entry.details === null || entry.details === undefined
-        ? ""
-        : `<pre class="coach-log__details">${escapeHtml(
-            typeof entry.details === "string" ? entry.details : JSON.stringify(entry.details, null, 2)
-          )}</pre>`;
+function formatLogDetails(details) {
+  if (details === null || details === undefined) {
+    return "";
+  }
 
-      return `
-        <article class="coach-log__entry coach-log__entry--${escapeHtml(entry.level.toLowerCase())}">
-          <header class="coach-log__meta">
-            <span class="coach-log__timestamp">${escapeHtml(entry.timestamp)}</span>
-            <span class="coach-log__step">${escapeHtml(entry.step)}</span>
-            <span class="coach-log__elapsed">+${escapeHtml(entry.elapsedMs)}ms</span>
-            <span class="coach-log__level">${escapeHtml(entry.level)}</span>
-          </header>
-          ${details}
-        </article>
-      `;
-    })
-    .join("\n");
+  return `<pre class="coach-log__details">${escapeHtml(
+    typeof details === "string" ? details : JSON.stringify(details, null, 2)
+  )}</pre>`;
+}
+
+function groupLogEntries(entries) {
+  const groups = new Map();
+
+  for (const entry of entries) {
+    const group = groups.get(entry.requestId) ?? {
+      requestId: entry.requestId,
+      entries: [],
+    };
+
+    group.entries.push(entry);
+    groups.set(entry.requestId, group);
+  }
+
+  return Array.from(groups.values());
+}
+
+function renderLogStep(entry) {
+  return `
+    <details class="coach-log__step coach-log__step--${escapeHtml(entry.level.toLowerCase())}">
+      <summary class="coach-log__summary coach-log__step-summary">
+        <span class="coach-log__arrow" aria-hidden="true"></span>
+        <span class="coach-log__meta">
+          <span class="coach-log__timestamp">${escapeHtml(entry.timestamp)}</span>
+          <span class="coach-log__step-name">${escapeHtml(entry.step)}</span>
+          <span class="coach-log__elapsed">+${escapeHtml(entry.elapsedMs)}ms</span>
+          <span class="coach-log__level">${escapeHtml(entry.level)}</span>
+        </span>
+      </summary>
+      <div class="coach-log__body">
+        ${formatLogDetails(entry.details) || "<p class=\"coach-log__empty\">No details for this step.</p>"}
+      </div>
+    </details>
+  `;
+}
+
+function renderLogRequestGroup(group, index) {
+  const firstEntry = group.entries[0] ?? null;
+  const lastEntry = group.entries.at(-1) ?? null;
+  const requestDetails = firstEntry?.details && isPlainObject(firstEntry.details) ? firstEntry.details : null;
+  const requestMethod = isPlainObject(requestDetails) && isString(requestDetails.method) ? requestDetails.method : null;
+  const requestUrl = isPlainObject(requestDetails) && isString(requestDetails.url) ? requestDetails.url : null;
+  const stepCount = group.entries.length;
+  const summaryTitle = `Request ${index + 1}`;
+  const requestLabel = requestMethod && requestUrl ? `${requestMethod} ${requestUrl}` : group.requestId;
+  const durationLabel = firstEntry && lastEntry ? `+${lastEntry.elapsedMs - firstEntry.elapsedMs}ms` : null;
+
+  return `
+    <details class="coach-log__request">
+      <summary class="coach-log__summary coach-log__request-summary">
+        <span class="coach-log__arrow" aria-hidden="true"></span>
+        <span class="coach-log__request-meta">
+          <span class="coach-log__request-title">${escapeHtml(summaryTitle)}</span>
+          <span class="coach-log__request-id">${escapeHtml(group.requestId)}</span>
+          <span class="coach-log__request-label">${escapeHtml(requestLabel)}</span>
+          <span class="coach-log__request-count">${escapeHtml(stepCount)} steps</span>
+          ${durationLabel ? `<span class="coach-log__request-duration">${escapeHtml(durationLabel)}</span>` : ""}
+        </span>
+      </summary>
+      <div class="coach-log__request-body">
+        ${group.entries.map((entry) => renderLogStep(entry)).join("\n")}
+      </div>
+    </details>
+  `;
+}
+
+function renderLogPage(entries, filePath) {
+  const groups = groupLogEntries(entries);
+  const rows = groups.map((group, index) => renderLogRequestGroup(group, index)).join("\n");
 
   return `<!doctype html>
   <html lang="en">
@@ -201,18 +260,53 @@ function renderLogPage(entries, filePath) {
           color: var(--muted);
           font-size: 13px;
         }
-        .coach-log__entry {
+        .coach-log__request,
+        .coach-log__step {
           margin-bottom: 14px;
-          padding: 16px 18px;
           border: 1px solid var(--panel-border);
           border-radius: 14px;
           background: rgba(16, 24, 33, 0.92);
+          overflow: hidden;
         }
-        .coach-log__entry--warn {
+        .coach-log__request::marker,
+        .coach-log__request::-webkit-details-marker,
+        .coach-log__step::marker,
+        .coach-log__step::-webkit-details-marker {
+          display: none;
+        }
+        .coach-log__request--warn,
+        .coach-log__step--warn {
           border-color: rgba(251, 191, 36, 0.35);
         }
-        .coach-log__entry--error {
+        .coach-log__request--error,
+        .coach-log__step--error {
           border-color: rgba(248, 113, 113, 0.35);
+        }
+        .coach-log__summary {
+          list-style: none;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px 18px;
+          cursor: pointer;
+          user-select: none;
+        }
+        .coach-log__summary::-webkit-details-marker {
+          display: none;
+        }
+        .coach-log__arrow {
+          flex: 0 0 auto;
+          width: 10px;
+          height: 10px;
+          border-right: 2px solid var(--muted);
+          border-bottom: 2px solid var(--muted);
+          transform: rotate(-45deg);
+          transition: transform 160ms ease, border-color 160ms ease;
+        }
+        .coach-log__request[open] > .coach-log__summary .coach-log__arrow,
+        .coach-log__step[open] > .coach-log__summary .coach-log__arrow {
+          transform: rotate(45deg);
+          border-color: var(--accent);
         }
         .coach-log__meta {
           display: flex;
@@ -220,13 +314,56 @@ function renderLogPage(entries, filePath) {
           gap: 10px 14px;
           color: var(--muted);
           font-size: 12px;
-          margin-bottom: 10px;
+          min-width: 0;
         }
-        .coach-log__step {
+        .coach-log__step-name {
           color: var(--accent);
         }
         .coach-log__level {
           color: var(--warn);
+        }
+        .coach-log__request-summary {
+          padding: 16px 18px;
+        }
+        .coach-log__request-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px 14px;
+          min-width: 0;
+          color: var(--muted);
+          font-size: 12px;
+        }
+        .coach-log__request-title {
+          color: var(--text);
+          font-weight: 700;
+        }
+        .coach-log__request-id {
+          color: var(--muted);
+          opacity: 0.95;
+        }
+        .coach-log__request-label {
+          color: var(--accent);
+        }
+        .coach-log__request-count {
+          color: var(--warn);
+        }
+        .coach-log__request-duration {
+          color: var(--muted);
+        }
+        .coach-log__request-body {
+          padding: 0 18px 16px 40px;
+        }
+        .coach-log__step-summary {
+          padding: 14px 16px;
+          margin: 0 0 12px;
+          background: rgba(8, 13, 19, 0.55);
+          border-bottom: 1px solid rgba(35, 48, 65, 0.45);
+        }
+        .coach-log__step {
+          margin-bottom: 12px;
+        }
+        .coach-log__body {
+          padding: 0 18px 16px 40px;
         }
         .coach-log__details {
           margin: 0;
@@ -235,6 +372,11 @@ function renderLogPage(entries, filePath) {
           color: var(--text);
           font-size: 13px;
           line-height: 1.5;
+        }
+        .coach-log__empty {
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
         }
       </style>
     </head>
@@ -355,6 +497,16 @@ export function createCoachServer({
 
   return http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "content-type",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+      });
+      res.end();
+      return;
+    }
 
     if (req.method === "GET" && url.pathname === "/healthz") {
       jsonResponse(res, 200, { ok: true });

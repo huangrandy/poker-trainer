@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { CoachPanel } from "./components/CoachPanel";
 import { PokerTableScene } from "./components/PokerTableScene";
 import { DebugPanel } from "./components/DebugPanel";
 import { advanceBotTurns, type BotPersonaId } from "./features/bots";
@@ -70,10 +71,18 @@ const BOT_ACTION_DELAY_MS = 500;
 const STREET_REVEAL_DELAY_MS = 500;
 const GAME_STATE_STORAGE_KEY = "poker-trainer:game-state";
 const GAME_STATE_STORAGE_VERSION = 1;
+const DEBUG_SETTINGS_STORAGE_KEY = "poker-trainer:debug-settings";
+const DEBUG_SETTINGS_STORAGE_VERSION = 1;
 
 type PersistedGameState = {
     version: number;
     gameState: GameState;
+};
+
+type PersistedDebugSettings = {
+    version: number;
+    revealAllCards: boolean;
+    botAutoplayEnabled: boolean;
 };
 
 function getSeatActionPlacement(positionClass: string): SeatActionPlacement {
@@ -525,6 +534,43 @@ function savePersistedGameState(gameState: GameState): void {
     window.localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(payload));
 }
 
+function isPersistedDebugSettings(value: unknown): value is PersistedDebugSettings {
+    return (
+        isPlainObject(value) &&
+        value.version === DEBUG_SETTINGS_STORAGE_VERSION &&
+        typeof value.revealAllCards === "boolean" &&
+        typeof value.botAutoplayEnabled === "boolean"
+    );
+}
+
+function loadPersistedDebugSettings(): PersistedDebugSettings | null {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
+    const serializedState = window.localStorage.getItem(DEBUG_SETTINGS_STORAGE_KEY);
+
+    if (!serializedState) {
+        return null;
+    }
+
+    try {
+        const parsedState: unknown = JSON.parse(serializedState);
+
+        return isPersistedDebugSettings(parsedState) ? parsedState : null;
+    } catch {
+        return null;
+    }
+}
+
+function savePersistedDebugSettings(settings: PersistedDebugSettings): void {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    window.localStorage.setItem(DEBUG_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
 function TableCard({
     rank,
     suit,
@@ -698,6 +744,7 @@ function ActionButton({
 
 export default function App() {
     const persistedGameState = useMemo(() => loadPersistedGameState(), []);
+    const persistedDebugSettings = useMemo(() => loadPersistedDebugSettings(), []);
     const [gameState, setGameState] = useState<GameState>(() => persistedGameState ?? createInitialGameState());
     const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() =>
         persistedGameState
@@ -710,8 +757,12 @@ export default function App() {
             : new Map()
     );
     const [raiseDraft, setRaiseDraft] = useState<{ action: RaiseLegalAction; amount: number } | null>(null);
-    const [debugRevealAllCards, setDebugRevealAllCards] = useState(false);
-    const [botAutoplayEnabled, setBotAutoplayEnabled] = useState(true);
+    const [debugRevealAllCards, setDebugRevealAllCards] = useState(
+        () => persistedDebugSettings?.revealAllCards ?? false
+    );
+    const [botAutoplayEnabled, setBotAutoplayEnabled] = useState(
+        () => persistedDebugSettings?.botAutoplayEnabled ?? true
+    );
     const [tableLocked, setTableLocked] = useState(() => !persistedGameState);
     const [streetReveal, setStreetReveal] = useState({
         active: false,
@@ -829,6 +880,14 @@ export default function App() {
 
         savePersistedGameState(gameState);
     }, [gameState, persistedGameState, streetReveal.active, tableLocked]);
+
+    useEffect(() => {
+        savePersistedDebugSettings({
+            version: DEBUG_SETTINGS_STORAGE_VERSION,
+            revealAllCards: debugRevealAllCards,
+            botAutoplayEnabled,
+        });
+    }, [botAutoplayEnabled, debugRevealAllCards]);
 
     useEffect(() => {
         if (tableLocked) {
@@ -1074,6 +1133,16 @@ export default function App() {
                             ? "Hand complete. Rebuy the hero to continue."
                             : "Hand complete. Not enough players remain to start a new hand."
                     : "No legal actions available right now.";
+    const pendingStreetReveal =
+        !streetReveal.active &&
+        lastStreetRef.current !== gameState.street &&
+        gameState.street !== "showdown" &&
+        gameState.street !== "hand_complete";
+    const communityRevealFromIndex = streetReveal.active
+        ? streetReveal.fromIndex
+        : pendingStreetReveal
+            ? lastBoardLengthRef.current
+            : gameState.board.length;
 
     function handleAction(action: PlayerAction) {
         if (tableLocked) {
@@ -1263,6 +1332,7 @@ export default function App() {
                         handResultByPlayerId={handResultByPlayerId}
                         highlightedCardKeys={highlightedCardKeys}
                         streetReveal={streetReveal}
+                        communityRevealFromIndex={communityRevealFromIndex}
                         currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
                     />
                 </div>
@@ -1402,6 +1472,8 @@ export default function App() {
                         )}
                     </ul>
                 </article>
+
+                <CoachPanel gameState={gameState} />
 
                 {import.meta.env.DEV ? (
                     <DebugPanel

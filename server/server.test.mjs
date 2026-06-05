@@ -166,11 +166,28 @@ describe("coach server", () => {
       { traceEnabled: false, logStore }
     );
 
+    await handleCoachRequest(
+      Object.assign(Readable.from([JSON.stringify(mockFlopCoachRequest)]), {
+        method: "POST",
+        url: "/api/coach",
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+      {
+        writeHead() {},
+        end() {},
+      },
+      { traceEnabled: false, logStore }
+    );
+
     const logsPage = invokeServerRoute(server, "GET", "/coach-logs", "", { parseJson: false });
     const logsJson = invokeServerRoute(server, "GET", "/api/coach/logs");
 
     expect(logsPage.statusCode).toBe(200);
     expect(logsPage.rawBody).toContain("Coach Logs");
+    expect(logsPage.rawBody.match(/<summary class="coach-log__summary coach-log__request-summary">/g)?.length).toBe(2);
+    expect(logsPage.rawBody.match(/<summary class="coach-log__summary coach-log__step-summary">/g)?.length).toBeGreaterThan(0);
     expect(logsPage.rawBody).toContain("request.start");
     expect(logsPage.rawBody).toContain("response.sent");
     expect(logsJson.statusCode).toBe(200);

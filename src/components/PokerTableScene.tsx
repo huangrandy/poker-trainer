@@ -28,6 +28,7 @@ type PokerTableSceneProps = {
     handResultByPlayerId: Map<string, HandRevealPlayerResult>;
     highlightedCardKeys: Set<string>;
     streetReveal: StreetRevealState;
+    communityRevealFromIndex: number;
     currentActorSeatIndex: number | null;
 };
 
@@ -245,10 +246,10 @@ function TableCard({
         >
             <span className="table-card__inner">
                 <span className="table-card__face table-card__face--front">
-                    <span className="table-card__rank" style={{ fontSize: `${1.9 * scale}rem` }}>
+                    <span className="table-card__rank" style={{ fontSize: `${2.1 * scale}rem` }}>
                         {rank}
                     </span>
-                    <span className="table-card__suit" style={{ fontSize: `${1.6 * scale}rem` }}>
+                    <span className="table-card__suit" style={{ fontSize: `${1.7 * scale}rem` }}>
                         {getSuitSymbol(suit)}
                     </span>
                 </span>
@@ -296,6 +297,7 @@ export function PokerTableScene({
     handResultByPlayerId,
     highlightedCardKeys,
     streetReveal,
+    communityRevealFromIndex,
     currentActorSeatIndex,
 }: PokerTableSceneProps) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -392,7 +394,7 @@ export function PokerTableScene({
                     >
                         {Array.from({ length: boardSlots }).map((_, index) => {
                             const card = board[index];
-                            const isFaceDown = streetReveal.active && index >= streetReveal.fromIndex;
+                            const isFaceDown = index >= communityRevealFromIndex;
                             const isHighlighted =
                                 card && showHandRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false;
                             const isMuted = Boolean(
@@ -741,7 +743,7 @@ const styles = {
         display: "inline-grid",
         placeItems: "center",
         alignContent: "center",
-        gap: "2px",
+        gap: "4px",
         zIndex: 2,
         width: "fit-content",
         minWidth: 0,
