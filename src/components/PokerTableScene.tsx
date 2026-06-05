@@ -87,7 +87,7 @@ const SEATS: SeatSlot[] = [
         id: "seat-4",
         angle: 270,
         label: "Seat 4",
-        layout: { kind: "center", flipX: false, flipY: true, actionNudgeY: -85 },
+        layout: { kind: "center", flipX: false, flipY: true, actionNudgeY: -105 },
     },
     {
         id: "seat-5",
@@ -358,14 +358,14 @@ export function PokerTableScene({
                         ...styles.pot,
                         top: 314 * scale,
                         minWidth: 72 * scale,
-                        padding: `${12 * scale}px ${32 * scale}px`,
+                        padding: `${14 * scale}px ${26 * scale}px`,
                     }}
                 >
                     <span style={{ ...styles.potLabel, fontSize: `${11 * scale}px` }}>
                         {potLabel}
                     </span>
                     <span style={{ ...styles.potValue, fontSize: `${44 * scale}px` }}>
-                        {potAmount}
+                        ${potAmount}
                     </span>
                 </div>
 
@@ -524,7 +524,7 @@ export function PokerTableScene({
                                         width: actionRect.width * scale,
                                         minHeight: actionRect.height * scale,
                                         zIndex: 3,
-                                        fontSize: `${26 * scale}px`,
+                                        fontSize: `${24 * scale}px`,
                                     }}
                                 >
                                     {actionLabel}
