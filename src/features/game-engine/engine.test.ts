@@ -87,7 +87,24 @@ describe("engine basics", () => {
     expect(afterCheck.players[0].currentStreetBet).toBe(0);
     expect(afterCheck.players[1].currentStreetBet).toBe(0);
     expect(afterCheck.players[1].hasActedThisStreet).toBe(false);
-    expect(afterCheck.betting.currentActorSeatIndex).toBe(0);
+    expect(afterCheck.betting.currentActorSeatIndex).toBe(1);
+  });
+
+  it("uses the big blind as the first postflop actor heads-up", () => {
+    const started = startHand(createSampleGameState(), { random: () => 0 });
+    const afterPreflop = applyAction(
+      applyAction(started, {
+        type: "call",
+        playerId: "hero",
+      }),
+      {
+        type: "check",
+        playerId: "bot-1",
+      }
+    );
+
+    expect(afterPreflop.street).toBe("flop");
+    expect(afterPreflop.betting.currentActorSeatIndex).toBe(1);
   });
 
   it("rejects bet amounts below the legal minimum", () => {
@@ -142,33 +159,33 @@ describe("engine basics", () => {
     const afterFlop = applyAction(
       applyAction(afterPreflop, {
         type: "check",
-        playerId: "hero",
+        playerId: "bot-1",
       }),
       {
         type: "check",
-        playerId: "bot-1",
+        playerId: "hero",
       }
     );
 
     const afterTurn = applyAction(
       applyAction(afterFlop, {
         type: "check",
-        playerId: "hero",
+        playerId: "bot-1",
       }),
       {
         type: "check",
-        playerId: "bot-1",
+        playerId: "hero",
       }
     );
 
     const afterRiver = applyAction(
       applyAction(afterTurn, {
         type: "check",
-        playerId: "hero",
+        playerId: "bot-1",
       }),
       {
         type: "check",
-        playerId: "bot-1",
+        playerId: "hero",
       }
     );
 

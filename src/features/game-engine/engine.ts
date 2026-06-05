@@ -520,10 +520,6 @@ function getPostflopFirstActorSeatIndex(state: GameState): SeatIndex | null {
     return activeSeatIndexes[0];
   }
 
-  if (activeSeatIndexes.length === 2 && activeSeatIndexes.includes(buttonSeatIndex)) {
-    return buttonSeatIndex;
-  }
-
   return getNextSeatIndex(activeSeatIndexes, buttonSeatIndex);
 }
 
