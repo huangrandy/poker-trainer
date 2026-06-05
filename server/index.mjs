@@ -1,7 +1,6 @@
 import http from "node:http";
 import { buildCoachPrompt } from "./prompt.mjs";
-import { createMockCoachResponse } from "./mockCoach.mjs";
-import { mockFlopCoachRequest, mockPreflopCoachRequest } from "./fixtures.mjs";
+import { createCoachAdapterFromEnv } from "./coachAdapters.mjs";
 
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -126,7 +125,7 @@ async function readJsonBody(req) {
   return JSON.parse(raw);
 }
 
-export async function handleCoachRequest(req, res) {
+export async function handleCoachRequest(req, res, { coachAdapter = createCoachAdapterFromEnv() } = {}) {
   let body;
 
   try {
@@ -150,7 +149,7 @@ export async function handleCoachRequest(req, res) {
   }
 
   const prompt = buildCoachPrompt(body);
-  const response = createMockCoachResponse(body);
+  const response = await coachAdapter(body, prompt);
 
   jsonResponse(res, 200, {
     ...response,
@@ -158,7 +157,7 @@ export async function handleCoachRequest(req, res) {
   });
 }
 
-export function createCoachServer() {
+export function createCoachServer({ coachAdapter = createCoachAdapterFromEnv() } = {}) {
   return http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
 
@@ -168,7 +167,7 @@ export function createCoachServer() {
     }
 
     if (req.method === "POST" && url.pathname === "/api/coach") {
-      void handleCoachRequest(req, res);
+      void handleCoachRequest(req, res, { coachAdapter });
       return;
     }
 

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["text", "summary", "recommendedAction", "confidence"],
+  "properties": {
+    "text": { "type": "string" },
+    "summary": { "type": "string" },
+    "recommendedAction": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    },
+    "confidence": {
+      "anyOf": [
+        { "type": "string", "enum": ["low", "medium", "high"] },
+        { "type": "null" }
+      ]
+    }
+  }
+}

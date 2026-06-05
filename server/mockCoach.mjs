@@ -67,3 +67,11 @@ export function createMockCoachResponse(request) {
   };
 }
 
+export function createMockCoachAdapter() {
+  return async (request, prompt) => {
+    return {
+      ...createMockCoachResponse(request),
+      prompt,
+    };
+  };
+}
