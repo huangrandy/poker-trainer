@@ -560,7 +560,7 @@ export function PokerTableScene({
                     : "grayscale(0.35) brightness(0.82)",
                   boxShadow: player
                     ? showRevealResult && revealResult?.isWinner
-                      ? "0 0 0 1px rgba(110, 231, 183, 0.85), 0 0 0 8px rgba(34, 197, 94, 0.12), 0 0 18px rgba(34, 197, 94, 0.36), 0 0 34px rgba(14, 165, 233, 0.28), 0 24px 48px rgba(34, 197, 94, 0.16)"
+                      ? "0 0 18px rgba(34, 197, 94, 0.34), 0 0 36px rgba(34, 197, 94, 0.18), 0 0 56px rgba(14, 165, 233, 0.22), 0 24px 48px rgba(34, 197, 94, 0.1)"
                       : isCurrentActor
                       ? "0 0 0 1px rgba(250, 204, 21, 0.42), 0 0 32px rgba(250, 204, 21, 0.18)"
                       : "none"
