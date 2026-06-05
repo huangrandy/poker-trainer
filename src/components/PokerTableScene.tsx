@@ -518,10 +518,10 @@ export function PokerTableScene({
                                     className="poker-table-scene__action"
                                     style={{
                                         ...styles.actionTag,
-                                        left: actionRect.left * scale,
+                                        left: (actionRect.left + actionRect.width / 2) * scale,
                                         top:
                                             (actionRect.top + (seat.layout.actionNudgeY ?? 0)) * scale,
-                                        width: actionRect.width * scale,
+                                        transform: "translateX(-50%)",
                                         minHeight: actionRect.height * scale,
                                         zIndex: 3,
                                         fontSize: `${24 * scale}px`,
@@ -749,7 +749,7 @@ const styles = {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "0 12px",
+        padding: "8px 12px",
         boxSizing: "border-box" as const,
         lineHeight: 1,
         letterSpacing: "0.06em",
