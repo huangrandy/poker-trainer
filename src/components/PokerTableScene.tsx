@@ -87,7 +87,7 @@ const SEATS: SeatSlot[] = [
         id: "seat-4",
         angle: 270,
         label: "Seat 4",
-        layout: { kind: "center", flipX: false, flipY: true, actionNudgeY: -105 },
+        layout: { kind: "center", flipX: false, flipY: true, actionNudgeY: -112 },
     },
     {
         id: "seat-5",
@@ -473,7 +473,7 @@ export function PokerTableScene({
                     const cardsWidth = holeCardWidth * 2 + DESIGN.cardGap;
                     const cardsRect = {
                         left: bannerRect.left + (bannerRect.width - cardsWidth) / 2,
-                        top: bannerRect.top - holeCardHeight + 20,
+                        top: bannerRect.top - holeCardHeight + 24,
                         width: cardsWidth,
                         height: holeCardHeight,
                     };
@@ -560,7 +560,7 @@ export function PokerTableScene({
                                         transform: "translateX(-50%)",
                                         minHeight: actionRect.height * scale,
                                         zIndex: 3,
-                                        fontSize: `${24 * scale}px`,
+                                        fontSize: `${20 * scale}px`,
                                     }}
                                 >
                                     {actionLabel}
