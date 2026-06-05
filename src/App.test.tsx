@@ -179,6 +179,22 @@ function createActionChipState(): GameState {
   };
 }
 
+function createFoldedVillainState(): GameState {
+  return {
+    ...createActionChipState(),
+    players: createActionChipState().players.map((player) => {
+      if (player.id === "bot-1") {
+        return {
+          ...player,
+          status: "folded" as const,
+        };
+      }
+
+      return player;
+    }),
+  };
+}
+
 function createRaiseActionState(): GameState {
   return {
     ...createSampleGameState(),
@@ -402,6 +418,33 @@ describe("App", () => {
     expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
     expect(screen.getByText("Call $10")).toBeInTheDocument();
     expect(screen.getByText("Check")).toBeInTheDocument();
+  });
+
+  it("keeps villain hole cards face down during the hand and dims folded cards", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
+
+    const { container } = render(<App />);
+
+    expect(container.querySelectorAll(".poker-table-scene__hole-cards .table-card").length).toBe(4);
+    expect(container.querySelectorAll(".poker-table-scene__hole-cards .table-card--face-down")).toHaveLength(2);
+  });
+
+  it("dims folded villain cards before showdown", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createFoldedVillainState());
+
+    const { container } = render(<App />);
+    const foldedCards = container.querySelectorAll(".poker-table-scene__hole-cards .table-card--muted");
+
+    expect(foldedCards.length).toBe(2);
+    expect(container.querySelectorAll(".poker-table-scene__hole-cards .table-card--face-down")).toHaveLength(2);
+  });
+
+  it("flips all villain hole cards face up on showdown", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
+
+    const { container } = render(<App />);
+
+    expect(container.querySelectorAll(".poker-table-scene__hole-cards .table-card--face-down")).toHaveLength(0);
   });
 
   it("keeps blind chips visible through the end of preflop betting", async () => {

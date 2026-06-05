@@ -360,7 +360,7 @@ textarea {
     background: rgba(7, 17, 31, 0.96);
     border: 1px solid rgba(125, 211, 252, 0.28);
     color: #e2e8f0;
-    font-size: 0.78rem;
+    font-size: 1.56rem;
     letter-spacing: 0.02em;
     white-space: nowrap;
     box-shadow: 0 10px 24px rgba(2, 6, 23, 0.28);
@@ -830,22 +830,13 @@ textarea {
         grid-template-columns: 1fr;
     }
 
-    .table-layout {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-            "brand"
-            "stats"
-            "stage"
-            "actions";
-    }
-
     .table-layout__corner--stats {
-        width: 100%;
-        justify-self: stretch;
+        width: auto;
+        justify-self: end;
     }
 
     .table-layout__stats {
-        width: 100%;
+        width: auto;
     }
 
     .table-stage {
@@ -934,9 +925,26 @@ textarea {
         padding: 12px;
     }
 
-    .table-layout__stats,
     .state-grid {
         grid-template-columns: 1fr;
+    }
+
+    .table-layout__stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .table-layout__stats div {
+        padding: 10px 12px;
+        border-radius: 16px;
+    }
+
+    .table-layout__stats span {
+        font-size: 0.74rem;
+    }
+
+    .table-layout__stats strong {
+        font-size: 0.92rem;
     }
 
     .table-card {

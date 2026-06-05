@@ -413,6 +413,8 @@ export function PokerTableScene({
           const isCurrentActor = player?.seatIndex === currentActorSeatIndex;
           const revealResult = player ? handResultByPlayerId.get(player.id) ?? null : null;
           const showRevealResult = Boolean(showVillainHoleCards && revealResult);
+          const showCardsFaceUp = player?.isHero || showVillainHoleCards;
+          const shouldDimFoldedCards = Boolean(player && !showVillainHoleCards && player.status === "folded");
           const localRects = seatLocalRects[seat.layout.kind];
           const bannerRect = mirrorRect(
             localRects.banner,
@@ -462,8 +464,7 @@ export function PokerTableScene({
                 zIndex: 3,
               }}
             >
-              {player?.holeCards.length &&
-              (player.isHero || showVillainHoleCards) ? (
+              {player?.holeCards.length ? (
                 <div
                   className="poker-table-scene__hole-cards"
                   style={{
@@ -475,14 +476,19 @@ export function PokerTableScene({
                     gap: DESIGN.cardGap * scale,
                     zIndex: 2,
                   }}
-                >
+                  >
                   {player.holeCards.map((card, index) => (
                     <TableCard
                       key={`${player.id}-${card.rank}-${card.suit}-${index}`}
                       rank={card.rank}
                       suit={card.suit}
+                      isFaceDown={!showCardsFaceUp}
                       isHighlighted={showRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false}
-                      isMuted={showRevealResult ? !highlightedCardKeys.has(getCardKey(card)) : false}
+                      isMuted={
+                        showRevealResult
+                          ? !highlightedCardKeys.has(getCardKey(card))
+                          : shouldDimFoldedCards
+                      }
                       style={{
                         width: DESIGN.cardWidth * scale,
                         height: DESIGN.cardHeight * scale,
@@ -504,7 +510,7 @@ export function PokerTableScene({
                     width: actionRect.width * scale,
                     height: actionRect.height * scale,
                     zIndex: 3,
-                    fontSize: `${13 * scale}px`,
+                    fontSize: `${26 * scale}px`,
                   }}
                 >
                   {actionLabel}
