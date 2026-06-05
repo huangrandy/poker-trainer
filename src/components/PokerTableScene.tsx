@@ -214,6 +214,7 @@ function TableCard({
     rank,
     suit,
     style,
+    scale = 1,
     isFaceDown = false,
     isHighlighted = false,
     isMuted = false,
@@ -221,6 +222,7 @@ function TableCard({
     rank: string;
     suit: string;
     style?: CSSProperties;
+    scale?: number;
     isFaceDown?: boolean;
     isHighlighted?: boolean;
     isMuted?: boolean;
@@ -241,8 +243,12 @@ function TableCard({
         >
             <span className="table-card__inner">
                 <span className="table-card__face table-card__face--front">
-                    <span className="table-card__rank">{rank}</span>
-                    <span className="table-card__suit">{getSuitSymbol(suit)}</span>
+                    <span className="table-card__rank" style={{ fontSize: `${1.9 * scale}rem` }}>
+                        {rank}
+                    </span>
+                    <span className="table-card__suit" style={{ fontSize: `${1.6 * scale}rem` }}>
+                        {getSuitSymbol(suit)}
+                    </span>
                 </span>
                 <span className="table-card__face table-card__face--back" aria-hidden="true" />
             </span>
@@ -407,6 +413,7 @@ export function PokerTableScene({
                                         height: DESIGN.cardHeight * scale,
                                         borderRadius: "12px",
                                     }}
+                                    scale={scale}
                                 />
                             ) : (
                                 <div
@@ -532,6 +539,7 @@ export function PokerTableScene({
                                                 height: holeCardHeight * scale,
                                                 borderRadius: "12px",
                                             }}
+                                            scale={scale}
                                         />
                                     ))}
                                 </div>
