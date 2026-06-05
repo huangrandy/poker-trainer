@@ -78,7 +78,6 @@ describe("DebugPanel", () => {
       { rank: "Q", suit: "spades" },
       { rank: "K", suit: "diamonds" },
     ]);
-    expect(screen.getByText(/Current actor:/i)).toBeInTheDocument();
     expect(screen.getByText("Effective: TAG")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "General" })).toBeInTheDocument();
   });

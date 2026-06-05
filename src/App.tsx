@@ -54,6 +54,10 @@ function getSuitTone(suit: string): string {
 }
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
+type SeatRoleBadge = {
+    label: "D" | "SB" | "BB";
+    tone: "dealer" | "smallBlind" | "bigBlind";
+};
 type RaisePresetKey = "min" | "half_pot" | "three_quarter_pot" | "pot" | "max";
 type RaiseLegalAction = LegalAction & {
     type: "raise";
@@ -159,8 +163,81 @@ function buildBlindRevealActions(state: GameState): Array<{ playerId: string; la
         })
         .map((player, index) => ({
             playerId: player.id,
-            label: `${index === 0 ? "SB" : "BB"} $${player.currentStreetBet}`,
+            label: `$${player.currentStreetBet}`,
         }));
+}
+
+function buildSeatRoleBadges(state: GameState): Map<string, SeatRoleBadge[]> {
+    const badges = new Map<string, SeatRoleBadge[]>();
+    const visiblePlayers = state.players.filter((player) => player.status !== "out");
+    const buttonSeatIndex = state.buttonSeatIndex ?? state.dealerSeatIndex;
+
+    if (buttonSeatIndex === null || visiblePlayers.length < 2) {
+        return badges;
+    }
+
+    const orderedSeatIndexes = visiblePlayers
+        .map((player) => player.seatIndex)
+        .sort((left, right) => left - right);
+
+    const getNextSeatIndex = (seatIndex: number): number | null => {
+        const nextSeatIndex = orderedSeatIndexes.find((candidate) => candidate > seatIndex);
+
+        return nextSeatIndex ?? orderedSeatIndexes[0] ?? null;
+    };
+
+    const addBadge = (playerId: string, badge: SeatRoleBadge) => {
+        const existing = badges.get(playerId) ?? [];
+
+        if (existing.some((entry) => entry.label === badge.label)) {
+            return;
+        }
+
+        badges.set(playerId, [...existing, badge]);
+    };
+
+    const buttonPlayer = visiblePlayers.find((player) => player.seatIndex === buttonSeatIndex);
+
+    if (!buttonPlayer) {
+        return badges;
+    }
+
+    addBadge(buttonPlayer.id, { label: "D", tone: "dealer" });
+
+    if (visiblePlayers.length === 2) {
+        addBadge(buttonPlayer.id, { label: "SB", tone: "smallBlind" });
+
+        const bigBlindSeatIndex = getNextSeatIndex(buttonSeatIndex);
+        const bigBlindPlayer = bigBlindSeatIndex === null
+            ? null
+            : visiblePlayers.find((player) => player.seatIndex === bigBlindSeatIndex) ?? null;
+
+        if (bigBlindPlayer) {
+            addBadge(bigBlindPlayer.id, { label: "BB", tone: "bigBlind" });
+        }
+
+        return badges;
+    }
+
+    const smallBlindSeatIndex = getNextSeatIndex(buttonSeatIndex);
+    const smallBlindPlayer = smallBlindSeatIndex === null
+        ? null
+        : visiblePlayers.find((player) => player.seatIndex === smallBlindSeatIndex) ?? null;
+
+    if (smallBlindPlayer) {
+        addBadge(smallBlindPlayer.id, { label: "SB", tone: "smallBlind" });
+    }
+
+    const bigBlindSeatIndex = smallBlindSeatIndex === null ? null : getNextSeatIndex(smallBlindSeatIndex);
+    const bigBlindPlayer = bigBlindSeatIndex === null
+        ? null
+        : visiblePlayers.find((player) => player.seatIndex === bigBlindSeatIndex) ?? null;
+
+    if (bigBlindPlayer) {
+        addBadge(bigBlindPlayer.id, { label: "BB", tone: "bigBlind" });
+    }
+
+    return badges;
 }
 
 function mergeActionLabels(primary: Map<string, string>, secondary: Map<string, string>): Map<string, string> {
@@ -620,13 +697,22 @@ function ActionButton({
 }
 
 export default function App() {
-    const [gameState, setGameState] = useState<GameState>(() => loadPersistedGameState() ?? createInitialGameState());
-    const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() => new Map());
-    const [blindActionLabels, setBlindActionLabels] = useState<Map<string, string>>(() => new Map());
+    const persistedGameState = useMemo(() => loadPersistedGameState(), []);
+    const [gameState, setGameState] = useState<GameState>(() => persistedGameState ?? createInitialGameState());
+    const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() =>
+        persistedGameState
+            ? buildVisibleActionLabelsForStreet(persistedGameState, persistedGameState.street)
+            : new Map()
+    );
+    const [blindActionLabels, setBlindActionLabels] = useState<Map<string, string>>(() =>
+        persistedGameState && persistedGameState.street === "preflop"
+            ? new Map(buildBlindRevealActions(persistedGameState).map((entry) => [entry.playerId, entry.label]))
+            : new Map()
+    );
     const [raiseDraft, setRaiseDraft] = useState<{ action: RaiseLegalAction; amount: number } | null>(null);
     const [debugRevealAllCards, setDebugRevealAllCards] = useState(false);
     const [botAutoplayEnabled, setBotAutoplayEnabled] = useState(true);
-    const [tableLocked, setTableLocked] = useState(true);
+    const [tableLocked, setTableLocked] = useState(() => !persistedGameState);
     const [streetReveal, setStreetReveal] = useState({
         active: false,
         fromIndex: 0,
@@ -636,6 +722,7 @@ export default function App() {
     const revealTimerRef = useRef<number | null>(null);
     const blindRevealActiveRef = useRef(false);
     const streetRevealActiveRef = useRef(false);
+    const skipInitialRevealRef = useRef(Boolean(persistedGameState));
     const lastHandledStartHandIdRef = useRef<string | null>(null);
     const lastStreetRef = useRef<GameState["street"]>(gameState.street);
     const lastBoardLengthRef = useRef(gameState.board.length);
@@ -686,6 +773,10 @@ export default function App() {
         () => buildVisibleActionLabelsForStreet(gameState, gameState.street),
         [gameState.actionHistory, gameState.handNumber, gameState.street]
     );
+    const seatRoleBadgesByPlayerId = useMemo(
+        () => buildSeatRoleBadges(gameState),
+        [gameState.buttonSeatIndex, gameState.dealerSeatIndex, gameState.players]
+    );
     const sceneActionLabels = useMemo(() => {
         if (gameState.street !== "preflop") {
             return tableActionLabels;
@@ -732,8 +823,12 @@ export default function App() {
     }, [blindActionLabels.size, gameState]);
 
     useEffect(() => {
+        if (persistedGameState !== null && (tableLocked || streetReveal.active)) {
+            return;
+        }
+
         savePersistedGameState(gameState);
-    }, [gameState]);
+    }, [gameState, persistedGameState, streetReveal.active, tableLocked]);
 
     useEffect(() => {
         if (tableLocked) {
@@ -743,7 +838,19 @@ export default function App() {
         setTableActionLabels(visibleActionByPlayerId);
     }, [tableLocked, visibleActionByPlayerId]);
 
+    useEffect(() => {
+        return () => {
+            clearRevealTimers(botTimerRef, blindRevealTimerRef, revealTimerRef);
+        };
+    }, []);
+
     useLayoutEffect(() => {
+        if (skipInitialRevealRef.current) {
+            skipInitialRevealRef.current = false;
+            lastHandledStartHandIdRef.current = latestStartHandRecord?.id ?? null;
+            return;
+        }
+
         if (blindRevealActiveRef.current || streetRevealActiveRef.current) {
             return;
         }
@@ -915,12 +1022,6 @@ export default function App() {
             }, STREET_REVEAL_DELAY_MS);
         }
 
-        return () => {
-            if (revealTimerRef.current !== null) {
-                window.clearTimeout(revealTimerRef.current);
-                revealTimerRef.current = null;
-            }
-        };
     }, [gameState, latestStartHandRecord, visibleActionByPlayerId]);
 
     useEffect(() => {
@@ -1158,10 +1259,11 @@ export default function App() {
                         showVillainHoleCards={shouldRevealAllCards}
                         showHandRevealResult={showHandRevealResult}
                         visibleActionByPlayerId={sceneActionLabels}
+                        seatRoleBadgesByPlayerId={seatRoleBadgesByPlayerId}
                         handResultByPlayerId={handResultByPlayerId}
                         highlightedCardKeys={highlightedCardKeys}
                         streetReveal={streetReveal}
-                        currentActorSeatIndex={tableLocked ? null : gameState.betting.currentActorSeatIndex}
+                        currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
                     />
                 </div>
 

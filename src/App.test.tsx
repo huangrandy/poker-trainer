@@ -179,6 +179,22 @@ function createActionChipState(): GameState {
   };
 }
 
+function createBlindRevealState(startHandImpl: typeof engine.startHand): GameState {
+  const started = startHandImpl(createSampleGameState(), { random: () => 0 });
+
+  return {
+    ...started,
+    betting: {
+      ...started.betting,
+      currentActorSeatIndex: null,
+    },
+  };
+}
+
+function createPlayablePreflopState(startHandImpl: typeof engine.startHand): GameState {
+  return startHandImpl(createSampleGameState(), { random: () => 0 });
+}
+
 function createFoldedVillainState(): GameState {
   return {
     ...createActionChipState(),
@@ -271,18 +287,6 @@ function createPostflopActionChipState(): GameState {
       ...record,
       street: "flop",
     })),
-  };
-}
-
-function createBlindRevealState(startHandImpl: typeof engine.startHand): GameState {
-  const started = startHandImpl(createSampleGameState(), { random: () => 0 });
-
-  return {
-    ...started,
-    betting: {
-      ...started.betting,
-      currentActorSeatIndex: null,
-    },
   };
 }
 
@@ -478,6 +482,32 @@ describe("App", () => {
     expect(container.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
   });
 
+  it("restores a saved preflop betting state with action labels and controls", () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createPlayablePreflopState(realStartHand));
+    vi.useFakeTimers();
+
+    window.localStorage.setItem(
+      GAME_STATE_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        gameState: createPlayablePreflopState(realStartHand),
+      })
+    );
+
+    render(<App />);
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Street", { exact: true }).parentElement).toHaveTextContent("preflop");
+    expect(screen.getByText("$5")).toBeInTheDocument();
+    expect(screen.getByText("$10")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fold" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Call $5" })).toBeEnabled();
+  });
+
   it("falls back to a fresh game when saved state is invalid", () => {
     window.localStorage.setItem(GAME_STATE_STORAGE_KEY, "{\"version\":1,\"gameState\":null}");
 
@@ -538,20 +568,26 @@ describe("App", () => {
     expect(container.querySelectorAll(".poker-table-scene__hole-cards .table-card--face-down")).toHaveLength(0);
   });
 
-  it("keeps blind chips visible through the end of preflop betting", async () => {
+  it("renders persistent dealer and blind badges on the seats", () => {
     const realStartHand = engine.startHand;
     vi.spyOn(engine, "startHand").mockImplementation(() => createBlindRevealState(realStartHand));
 
     vi.useFakeTimers();
 
     const { container } = render(<App />);
-
-    await act(async () => {
+    act(() => {
       vi.runAllTimers();
     });
+    const heroBadges = container.querySelector('[data-player-id="hero"] .poker-table-scene__seat-role-badges');
+    const botBadges = container.querySelector('[data-player-id="bot-1"] .poker-table-scene__seat-role-badges');
 
-    expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
-    expect(screen.getByText("BB $10")).toBeInTheDocument();
+    expect(heroBadges).not.toBeNull();
+    expect(botBadges).not.toBeNull();
+    expect(heroBadges).toHaveTextContent("D");
+    expect(heroBadges).toHaveTextContent("SB");
+    expect(botBadges).toHaveTextContent("BB");
+    expect(screen.getByText("$5")).toBeInTheDocument();
+    expect(screen.getByText("$10")).toBeInTheDocument();
   });
 
   it("renders the community cards directly without a face-down reveal", async () => {
