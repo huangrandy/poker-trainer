@@ -372,7 +372,6 @@ export function PokerTableScene({
                     }}
                 >
                     <div style={styles.tableSurface} />
-                    <div aria-hidden="true" style={styles.tableTexture} />
                 </div>
 
                 <div
@@ -733,18 +732,6 @@ const styles = {
             "radial-gradient(circle at 50% 44%, rgba(70, 154, 96, 0.24) 0%, rgba(27, 103, 56, 0.94) 50%, rgba(18, 74, 41, 0.99) 74%, rgba(10, 48, 26, 1) 100%), linear-gradient(180deg, rgba(78, 160, 101, 0.12), rgba(4, 30, 16, 0.08))",
         boxShadow:
             "inset 0 0 0 1px rgba(255,255,255,0.08), inset 0 -26px 60px rgba(4, 32, 18, 0.22)",
-    },
-    tableTexture: {
-        position: "absolute" as const,
-        inset: 0,
-        borderRadius: "9999px",
-        pointerEvents: "none",
-        background:
-            "radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.08) 0 10px, transparent 28px), radial-gradient(circle at 42% 36%, rgba(0, 0, 0, 0.06) 0 12px, transparent 30px), radial-gradient(circle at 66% 26%, rgba(255, 255, 255, 0.06) 0 8px, transparent 26px), radial-gradient(circle at 80% 58%, rgba(0, 0, 0, 0.05) 0 11px, transparent 28px), radial-gradient(circle at 28% 74%, rgba(255, 255, 255, 0.05) 0 9px, transparent 24px), radial-gradient(circle at 62% 78%, rgba(0, 0, 0, 0.05) 0 10px, transparent 26px)",
-        backgroundSize: "220px 220px",
-        opacity: 0.42,
-        filter: "blur(2.5px)",
-        mixBlendMode: "overlay",
     },
     pot: {
         position: "absolute" as const,
