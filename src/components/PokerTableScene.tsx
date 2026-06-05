@@ -209,15 +209,23 @@ function TableCard({
   rank,
   suit,
   style,
+  isFaceDown = false,
 }: {
   rank: string;
   suit: string;
   style?: CSSProperties;
+  isFaceDown?: boolean;
 }) {
   return (
     <span
       aria-label={formatCardLabel(rank, suit)}
-      className={["table-card", `table-card--${getSuitTone(suit)}`].join(" ")}
+      className={[
+        "table-card",
+        `table-card--${getSuitTone(suit)}`,
+        isFaceDown ? "table-card--face-down" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={style}
     >
       <span className="table-card__inner">
@@ -264,6 +272,7 @@ export function PokerTableScene({
   potAmount,
   showVillainHoleCards,
   visibleActionByPlayerId,
+  streetReveal,
   currentActorSeatIndex,
 }: PokerTableSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -356,12 +365,14 @@ export function PokerTableScene({
         >
           {Array.from({ length: boardSlots }).map((_, index) => {
             const card = board[index];
+            const isFaceDown = streetReveal.active && index >= streetReveal.fromIndex;
 
             return card ? (
               <TableCard
                 key={`${card.rank}-${card.suit}-${index}`}
                 rank={card.rank}
                 suit={card.suit}
+                isFaceDown={isFaceDown}
                 style={{
                   width: DESIGN.communityCardWidth * scale,
                   height: DESIGN.communityCardHeight * scale,
@@ -607,9 +618,11 @@ const styles = {
   },
   communityCard: {
     borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: "#f1f1f1",
-    boxShadow: "none",
+    border: "1px solid rgba(255,255,255,0.24)",
+    background:
+      "linear-gradient(180deg, rgba(15, 23, 42, 0.16), rgba(15, 23, 42, 0.08))",
+    boxShadow:
+      "inset 0 0 0 1px rgba(255,255,255,0.08), inset 0 0 0 2px rgba(255,255,255,0.03)",
   },
   actionTag: {
     position: "absolute" as const,

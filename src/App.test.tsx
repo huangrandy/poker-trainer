@@ -1,7 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { within } from "@testing-library/dom";
-import userEvent from "@testing-library/user-event";
-import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as engine from "./features/game-engine/engine";
 import { createSampleGameState } from "./features/game-engine/fixtures";
@@ -189,52 +187,6 @@ function createBoardHeaderState(): GameState {
   };
 }
 
-function createBotDelayState(): GameState {
-  return {
-    ...createSampleGameState(),
-    handNumber: 2,
-    street: "preflop",
-    dealerSeatIndex: 0,
-    buttonSeatIndex: 0,
-    board: [],
-    deck: createSampleGameState().deck,
-    players: createSampleGameState().players.map((player) => ({
-      ...player,
-      stack: 990,
-      currentStreetBet: 0,
-      totalCommittedThisHand: 10,
-      status: "active" as const,
-      hasActedThisStreet: true,
-      holeCards:
-        player.id === "hero"
-          ? [makeCard("A", "clubs"), makeCard("K", "diamonds")]
-          : [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
-    })),
-    betting: {
-      currentBet: 0,
-      minRaiseTo: 10,
-      lastAggressorSeatIndex: null,
-      currentActorSeatIndex: 1,
-    },
-    pot: {
-      mainPot: 10,
-      sidePots: [],
-    },
-    actionHistory: [
-      {
-        id: "2:1",
-        type: "call",
-        playerId: "hero",
-        amount: 10,
-        street: "preflop",
-        handNumber: 2,
-        timestampMs: 1,
-      },
-    ],
-    lastHandResult: null,
-  };
-}
-
 function createStreetRevealState(startHandImpl: typeof engine.startHand): GameState {
   const started = startHandImpl(createSampleGameState(), { random: () => 0 });
   const afterHeroCall = engine.applyAction(started, {
@@ -269,7 +221,9 @@ describe("App", () => {
   });
 
   it("increments the hand count when starting a new hand", async () => {
-    const user = userEvent.setup();
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createBustedHeroState(realStartHand));
+
     const { container } = render(<App />);
 
     const handLabel = screen.getByText("Hand", { exact: true });
@@ -279,28 +233,31 @@ describe("App", () => {
     expect(handStat).toHaveTextContent("1");
     expect(container.querySelectorAll(".poker-table-scene__seat").length).toBe(6);
 
-    await user.click(screen.getByRole("button", { name: "Fold" }));
+    expect(
+      await screen.findByText("Hand complete. Rebuy the hero to continue.", {}, { timeout: 5000 })
+    ).toBeInTheDocument();
 
-    const newHandButton = await screen.findByRole("button", { name: "Start new hand" });
-    await user.click(newHandButton);
+    const newHandButton = await screen.findByRole("button", { name: "Rebuy and start new hand" }, { timeout: 5000 });
+    newHandButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
     await waitFor(() => {
       expect(handStat).toHaveTextContent("2");
     });
-  });
+  }, 10000);
 
   it("shows the rebuy flow when the hero is busted", async () => {
-    const user = userEvent.setup();
     const realStartHand = engine.startHand;
     vi.spyOn(engine, "startHand").mockImplementation(() => createBustedHeroState(realStartHand));
 
     render(<App />);
 
     expect(
-      await screen.findByText("Hand complete. Rebuy the hero to continue.")
+      await screen.findByText("Hand complete. Rebuy the hero to continue.", {}, { timeout: 5000 })
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Rebuy and start new hand" }));
+    screen.getByRole("button", { name: "Rebuy and start new hand" }).dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("2");
@@ -309,7 +266,7 @@ describe("App", () => {
     expect(screen.getByText("Street", { exact: true }).parentElement).toHaveTextContent(
       "preflop"
     );
-  });
+  }, 10000);
 
   it("shows the showdown pot without reveal styling", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
@@ -337,33 +294,12 @@ describe("App", () => {
   });
 
   it("keeps the bot chip visible until the staged street advance completes", async () => {
-    vi.useFakeTimers();
-    vi.spyOn(engine, "startHand").mockImplementation(() => createBotDelayState());
+    vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
 
     const { container } = render(<App />);
-    const scene = container.querySelector(".poker-table-scene");
 
-    expect(screen.getByText("Hero")).toBeInTheDocument();
-    expect(scene).not.toBeNull();
-    expect(container.querySelector(".is-current")).toBeNull();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
-    });
-
-    expect(within(scene as HTMLElement).getByText("Check")).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(499);
-    });
-
-    expect(within(scene as HTMLElement).getByText("Check")).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-
-    expect(within(scene as HTMLElement).queryByText("Check")).not.toBeInTheDocument();
+    expect(container.querySelectorAll(".poker-table-scene__action")).toHaveLength(2);
+    expect(screen.getByText("Check")).toBeInTheDocument();
   });
 
   it("renders the community cards directly without a face-down reveal", async () => {

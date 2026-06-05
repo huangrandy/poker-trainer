@@ -54,6 +54,7 @@ function getSuitTone(suit: string): string {
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
 
+const BLIND_REVEAL_DELAY_MS = 500;
 const BOT_ACTION_DELAY_MS = 500;
 const STREET_REVEAL_DELAY_MS = 500;
 
@@ -103,6 +104,49 @@ function describeVisibleAction(record: GameState["actionHistory"][number]): stri
     }
 
     return null;
+}
+
+function buildVisibleActionLabelsForStreet(
+    state: GameState,
+    street: GameState["street"]
+): Map<string, string> {
+    const labels = new Map<string, string>();
+
+    for (const record of state.actionHistory) {
+        if (record.playerId === null) {
+            continue;
+        }
+
+        if (record.handNumber !== state.handNumber || record.street !== street) {
+            continue;
+        }
+
+        const label = describeVisibleAction(record);
+
+        if (!label) {
+            continue;
+        }
+
+        labels.set(record.playerId, label);
+    }
+
+    return labels;
+}
+
+function buildBlindRevealActions(state: GameState): Array<{ playerId: string; label: string }> {
+    return state.players
+        .filter((player) => player.status !== "out" && player.currentStreetBet > 0)
+        .sort((left, right) => {
+            if (left.currentStreetBet !== right.currentStreetBet) {
+                return left.currentStreetBet - right.currentStreetBet;
+            }
+
+            return left.seatIndex - right.seatIndex;
+        })
+        .map((player, index) => ({
+            playerId: player.id,
+            label: `${index === 0 ? "Small blind" : "Big blind"} $${player.currentStreetBet}`,
+        }));
 }
 
 function getSeatPosition(index: number, total: number): string {
@@ -312,19 +356,37 @@ function ActionButton({
 
 export default function App() {
     const [gameState, setGameState] = useState<GameState>(() => createInitialGameState());
-    const [displayGameState, setDisplayGameState] = useState<GameState>(() => createInitialGameState());
+    const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() => new Map());
+    const [tableLocked, setTableLocked] = useState(true);
     const [streetReveal, setStreetReveal] = useState({
         active: false,
         fromIndex: 0,
     });
     const botTimerRef = useRef<number | null>(null);
+    const blindRevealTimerRef = useRef<number | null>(null);
     const revealTimerRef = useRef<number | null>(null);
-    const lastDisplayedGameStateRef = useRef<GameState | null>(null);
+    const blindRevealActiveRef = useRef(false);
+    const streetRevealActiveRef = useRef(false);
+    const lastHandledStartHandIdRef = useRef<string | null>(null);
+    const lastStreetRef = useRef<GameState["street"]>(gameState.street);
+    const lastBoardLengthRef = useRef(gameState.board.length);
 
     const currentActor = useMemo(
         () => gameState.players.find((player) => player.seatIndex === gameState.betting.currentActorSeatIndex) ?? null,
         [gameState.betting.currentActorSeatIndex, gameState.players]
     );
+
+    const latestStartHandRecord = useMemo(() => {
+        for (let index = gameState.actionHistory.length - 1; index >= 0; index -= 1) {
+            const record = gameState.actionHistory[index];
+
+            if (record.handNumber === gameState.handNumber && record.type === "start_hand") {
+                return record;
+            }
+        }
+
+        return null;
+    }, [gameState.actionHistory, gameState.handNumber]);
 
     const legalActions = useMemo(() => {
         if (!currentActor) {
@@ -335,47 +397,25 @@ export default function App() {
     }, [gameState, currentActor]);
 
     const handResult = gameState.lastHandResult;
-    const displayHandResult = displayGameState.lastHandResult;
     const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
-    const showVillainHoleCards =
-        displayGameState.street === "showdown" || displayHandResult?.kind === "showdown";
-    const centerPotLabel =
-        displayGameState.street === "hand_complete" && displayHandResult !== null ? "Pot awarded" : "Pot";
-    const centerPotAmount = displayHandResult?.potAwarded ?? displayGameState.pot.mainPot;
+    const showVillainHoleCards = gameState.street === "showdown" || handResult?.kind === "showdown";
+    const centerPotLabel = isHandComplete ? "Pot awarded" : "Pot";
+    const centerPotAmount = handResult?.potAwarded ?? gameState.pot.mainPot;
     const handResultByPlayerId = useMemo(
         () =>
             new Map(
-                displayHandResult?.playerResults.map((result) => [result.playerId, result] as const) ?? []
+                handResult?.playerResults.map((result) => [result.playerId, result] as const) ?? []
             ),
-        [displayHandResult]
+        [handResult]
     );
-    const visibleActionByPlayerId = useMemo(() => {
-        const latestActions = new Map<string, string>();
-
-        for (const record of displayGameState.actionHistory) {
-            if (record.playerId === null) {
-                continue;
-            }
-
-            if (record.handNumber !== displayGameState.handNumber || record.street !== displayGameState.street) {
-                continue;
-            }
-
-            const label = describeVisibleAction(record);
-
-            if (!label) {
-                continue;
-            }
-
-            latestActions.set(record.playerId, label);
-        }
-
-        return latestActions;
-    }, [displayGameState.actionHistory, displayGameState.handNumber, displayGameState.street]);
+    const visibleActionByPlayerId = useMemo(
+        () => buildVisibleActionLabelsForStreet(gameState, gameState.street),
+        [gameState.actionHistory, gameState.handNumber, gameState.street]
+    );
     const highlightedCardKeys = useMemo(() => {
         const keys = new Set<string>();
 
-        for (const result of displayHandResult?.playerResults ?? []) {
+        for (const result of handResult?.playerResults ?? []) {
             if (!result.isWinner) {
                 continue;
             }
@@ -388,53 +428,124 @@ export default function App() {
         return keys;
     }, [handResult]);
 
+    useEffect(() => {
+        if (tableLocked) {
+            return;
+        }
+
+        setTableActionLabels(visibleActionByPlayerId);
+    }, [tableLocked, visibleActionByPlayerId]);
+
     useLayoutEffect(() => {
-        const previousGameState = lastDisplayedGameStateRef.current;
+        if (blindRevealActiveRef.current || streetRevealActiveRef.current) {
+            return;
+        }
+
+        const startHandId = latestStartHandRecord?.id ?? null;
+
+        if (startHandId !== null && startHandId !== lastHandledStartHandIdRef.current) {
+            lastHandledStartHandIdRef.current = startHandId;
+            blindRevealActiveRef.current = true;
+
+            if (blindRevealTimerRef.current !== null) {
+                window.clearTimeout(blindRevealTimerRef.current);
+                blindRevealTimerRef.current = null;
+            }
+
+            if (revealTimerRef.current !== null) {
+                window.clearTimeout(revealTimerRef.current);
+                revealTimerRef.current = null;
+            }
+
+            const blindRevealActions = buildBlindRevealActions(gameState);
+            setTableLocked(true);
+            setTableActionLabels(new Map());
+
+            if (blindRevealActions.length === 0) {
+                blindRevealActiveRef.current = false;
+                setTableActionLabels(visibleActionByPlayerId);
+                setTableLocked(false);
+                return;
+            }
+
+            let revealIndex = 0;
+
+            const revealNextBlind = () => {
+                const nextLabels = new Map<string, string>();
+
+                for (let index = 0; index <= revealIndex; index += 1) {
+                    const entry = blindRevealActions[index];
+
+                    if (entry) {
+                        nextLabels.set(entry.playerId, entry.label);
+                    }
+                }
+
+                setTableActionLabels(nextLabels);
+
+                if (revealIndex >= blindRevealActions.length - 1) {
+                    blindRevealTimerRef.current = window.setTimeout(() => {
+                        blindRevealActiveRef.current = false;
+                        setTableActionLabels(visibleActionByPlayerId);
+                        setTableLocked(false);
+                        blindRevealTimerRef.current = null;
+                    }, BLIND_REVEAL_DELAY_MS);
+                    return;
+                }
+
+                revealIndex += 1;
+                blindRevealTimerRef.current = window.setTimeout(revealNextBlind, BLIND_REVEAL_DELAY_MS);
+            };
+
+            blindRevealTimerRef.current = window.setTimeout(revealNextBlind, BLIND_REVEAL_DELAY_MS);
+            lastStreetRef.current = gameState.street;
+            lastBoardLengthRef.current = gameState.board.length;
+            setStreetReveal({ active: false, fromIndex: gameState.board.length });
+            return;
+        }
+
+        const previousStreet = lastStreetRef.current;
+        const previousBoardLength = lastBoardLengthRef.current;
+        lastStreetRef.current = gameState.street;
+        lastBoardLengthRef.current = gameState.board.length;
 
         if (revealTimerRef.current !== null) {
             window.clearTimeout(revealTimerRef.current);
             revealTimerRef.current = null;
         }
 
-        if (previousGameState === null) {
-            lastDisplayedGameStateRef.current = gameState;
-            setDisplayGameState(gameState);
+        if (previousStreet === gameState.street) {
+            setTableLocked(false);
             setStreetReveal({ active: false, fromIndex: gameState.board.length });
             return;
         }
 
-        const shouldStageStreetTransition =
-            previousGameState.street !== gameState.street &&
-            gameState.street !== "showdown" &&
-            gameState.street !== "hand_complete";
+        if (gameState.street === "showdown" || gameState.street === "hand_complete") {
+            setTableActionLabels(visibleActionByPlayerId);
+            setTableLocked(false);
+            setStreetReveal({ active: false, fromIndex: gameState.board.length });
+        } else {
+            streetRevealActiveRef.current = true;
+            const previousStreetActions = buildVisibleActionLabelsForStreet(gameState, previousStreet);
 
-        if (shouldStageStreetTransition) {
+            setTableActionLabels(previousStreetActions);
+            setTableLocked(true);
             setStreetReveal({
                 active: true,
-                fromIndex: previousGameState.board.length,
-            });
-            setDisplayGameState({
-                ...previousGameState,
-                actionHistory: gameState.actionHistory,
+                fromIndex: previousBoardLength,
             });
 
             revealTimerRef.current = window.setTimeout(() => {
-                setDisplayGameState(gameState);
+                streetRevealActiveRef.current = false;
+                setTableActionLabels(visibleActionByPlayerId);
+                setTableLocked(false);
                 setStreetReveal({
                     active: false,
                     fromIndex: gameState.board.length,
                 });
                 revealTimerRef.current = null;
             }, STREET_REVEAL_DELAY_MS);
-        } else {
-            setDisplayGameState(gameState);
-            setStreetReveal({
-                active: false,
-                fromIndex: gameState.board.length,
-            });
         }
-
-        lastDisplayedGameStateRef.current = gameState;
 
         return () => {
             if (revealTimerRef.current !== null) {
@@ -442,7 +553,7 @@ export default function App() {
                 revealTimerRef.current = null;
             }
         };
-    }, [gameState]);
+    }, [gameState, latestStartHandRecord, visibleActionByPlayerId]);
 
     useEffect(() => {
         if (botTimerRef.current !== null) {
@@ -450,7 +561,7 @@ export default function App() {
             botTimerRef.current = null;
         }
 
-        if (streetReveal.active || currentActor === null || !currentActor.isBot) {
+        if (tableLocked || streetReveal.active || currentActor === null || !currentActor.isBot) {
             return;
         }
 
@@ -465,7 +576,7 @@ export default function App() {
                 botTimerRef.current = null;
             }
         };
-    }, [currentActor, streetReveal.active, gameState.handNumber, gameState.street]);
+    }, [currentActor, streetReveal.active, tableLocked, gameState.handNumber, gameState.street]);
 
     const restartablePlayers = gameState.players.filter(
         (player) => player.status !== "out" && player.stack > 0
@@ -477,15 +588,23 @@ export default function App() {
         heroPlayer?.stack === 0 &&
         gameState.players.some((player) => !player.isHero && player.stack > 0);
     const emptyActionMessage =
-        gameState.street === "hand_complete"
+        tableLocked && latestStartHandRecord !== null
+            ? "Posting blinds..."
+            : streetReveal.active
+                ? "Dealing the next street..."
+                : gameState.street === "hand_complete"
             ? canStartNextHand
                 ? "Hand complete. Start a new hand to continue."
                 : canRebuyHero
                     ? "Hand complete. Rebuy the hero to continue."
                     : "Hand complete. Not enough players remain to start a new hand."
-            : "No legal actions available right now.";
+                : "No legal actions available right now.";
 
     function handleAction(action: PlayerAction) {
+        if (tableLocked) {
+            return;
+        }
+
         setGameState((previous) => {
             const nextState = applyAction(previous, action);
             return nextState;
@@ -541,16 +660,16 @@ export default function App() {
 
                 <div className="table-stage table-stage--demo">
                     <PokerTableScene
-                        players={displayGameState.players}
-                        board={displayGameState.board}
+                        players={gameState.players}
+                        board={gameState.board}
                         potLabel={centerPotLabel}
                         potAmount={centerPotAmount}
                         showVillainHoleCards={showVillainHoleCards}
-                        visibleActionByPlayerId={visibleActionByPlayerId}
+                        visibleActionByPlayerId={tableActionLabels}
                         handResultByPlayerId={handResultByPlayerId}
                         highlightedCardKeys={highlightedCardKeys}
                         streetReveal={streetReveal}
-                        currentActorSeatIndex={displayGameState.betting.currentActorSeatIndex}
+                        currentActorSeatIndex={tableLocked ? null : gameState.betting.currentActorSeatIndex}
                     />
                 </div>
 
