@@ -43,6 +43,12 @@ textarea {
     gap: 24px;
 }
 
+.top-layout {
+    display: grid;
+    gap: 16px;
+    align-items: start;
+}
+
 .table-layout,
 .panel {
     border: 1px solid rgba(148, 163, 184, 0.18);
@@ -86,8 +92,9 @@ textarea {
 
 .table-layout__stats {
     display: grid;
-    grid-template-columns: repeat(2, minmax(84px, 1fr));
+    grid-template-columns: repeat(2, max-content);
     gap: 12px;
+    width: fit-content;
 }
 
 .table-layout__stats div {
@@ -787,33 +794,7 @@ textarea {
 .coach-panel {
     display: grid;
     gap: 16px;
-}
-
-.coach-panel__meta {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.coach-panel__meta div {
-    padding: 12px 14px;
-    border-radius: 18px;
-    background: rgba(15, 23, 42, 0.72);
-    border: 1px solid rgba(148, 163, 184, 0.16);
-}
-
-.coach-panel__meta span {
-    display: block;
-    color: #94a3b8;
-    font-size: 0.82rem;
-}
-
-.coach-panel__meta strong {
-    display: block;
-    margin-top: 4px;
-    color: #f8fafc;
-    font-size: 1rem;
-    word-break: break-word;
+    min-width: 0;
 }
 
 .coach-panel__prompt {
@@ -878,6 +859,7 @@ textarea {
 .coach-panel__messages {
     display: grid;
     gap: 12px;
+    min-height: 0;
 }
 
 .coach-panel__message {
@@ -1245,6 +1227,10 @@ textarea {
 }
 
 @media (max-width: 1000px) {
+    .top-layout {
+        grid-template-columns: 1fr;
+    }
+
     .dashboard {
         grid-template-columns: 1fr;
     }
@@ -1275,6 +1261,33 @@ textarea {
     .raise-tray__secondary-button,
     .raise-tray__primary-button {
         flex: 1 1 0;
+    }
+}
+
+@media (min-width: 1200px) {
+    .top-layout {
+        grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+        align-items: stretch;
+    }
+
+    .table-layout,
+    .coach-panel {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .coach-panel {
+        max-height: calc(100vh - 48px);
+        overflow: hidden;
+        grid-template-rows: auto auto auto minmax(0, 1fr);
+    }
+
+    .table-layout {
+        max-height: calc(100vh - 48px);
+    }
+
+    .coach-panel__messages {
+        overflow: auto;
     }
 }
 
@@ -1322,6 +1335,10 @@ textarea {
 @media (max-width: 720px) {
     .app-shell {
         padding: 14px;
+    }
+
+    .top-layout {
+        grid-template-columns: 1fr;
     }
 
     .table-layout,

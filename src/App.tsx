@@ -1300,123 +1300,127 @@ export default function App() {
 
     return (
         <main className="app-shell">
-            <section className="table-layout">
-                <div className="table-layout__corner table-layout__corner--brand">
-                    <p className="eyebrow">Poker Trainer</p>
-                    <h1>Table view</h1>
-                </div>
+            <section className="top-layout">
+                <section className="table-layout">
+                    <div className="table-layout__corner table-layout__corner--brand">
+                        <p className="eyebrow">Poker Trainer</p>
+                        <h1>Table view</h1>
+                    </div>
 
-                <div className="table-layout__corner table-layout__corner--stats">
-                    <div className="table-layout__stats">
-                        <div>
-                            <span>Hand</span>
-                            <strong>{gameState.handNumber}</strong>
-                        </div>
-                        <div>
-                            <span>Street</span>
-                            <strong>{gameState.street}</strong>
+                    <div className="table-layout__corner table-layout__corner--stats">
+                        <div className="table-layout__stats">
+                            <div>
+                                <span>Hand</span>
+                                <strong>{gameState.handNumber}</strong>
+                            </div>
+                            <div>
+                                <span>Street</span>
+                                <strong>{gameState.street}</strong>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="table-stage table-stage--demo">
-                    <PokerTableScene
-                        players={gameState.players}
-                        board={gameState.board}
-                        potLabel={centerPotLabel}
-                        potAmount={centerPotAmount}
-                        showVillainHoleCards={shouldRevealAllCards}
-                        showHandRevealResult={showHandRevealResult}
-                        visibleActionByPlayerId={sceneActionLabels}
-                        seatRoleBadgesByPlayerId={seatRoleBadgesByPlayerId}
-                        handResultByPlayerId={handResultByPlayerId}
-                        highlightedCardKeys={highlightedCardKeys}
-                        streetReveal={streetReveal}
-                        communityRevealFromIndex={communityRevealFromIndex}
-                        currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
-                    />
-                </div>
+                    <div className="table-stage table-stage--demo">
+                        <PokerTableScene
+                            players={gameState.players}
+                            board={gameState.board}
+                            potLabel={centerPotLabel}
+                            potAmount={centerPotAmount}
+                            showVillainHoleCards={shouldRevealAllCards}
+                            showHandRevealResult={showHandRevealResult}
+                            visibleActionByPlayerId={sceneActionLabels}
+                            seatRoleBadgesByPlayerId={seatRoleBadgesByPlayerId}
+                            handResultByPlayerId={handResultByPlayerId}
+                            highlightedCardKeys={highlightedCardKeys}
+                            streetReveal={streetReveal}
+                            communityRevealFromIndex={communityRevealFromIndex}
+                            currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
+                        />
+                    </div>
 
-                <section className="table-actions" aria-label="Legal actions">
-                    {raiseDraft && currentActor ? (
-                        <div className="raise-tray" aria-label="Raise controls">
-                            <div className="raise-tray__presets" role="group" aria-label="Raise sizing presets">
-                                {(["min", "half_pot", "three_quarter_pot", "pot", "max"] as RaisePresetKey[]).map((preset) => {
-                                    const amount = getRaisePresetAmount(preset, gameState, raiseDraft.action);
-                                    const isActive = amount === raiseDraft.amount;
+                    <section className="table-actions" aria-label="Legal actions">
+                        {raiseDraft && currentActor ? (
+                            <div className="raise-tray" aria-label="Raise controls">
+                                <div className="raise-tray__presets" role="group" aria-label="Raise sizing presets">
+                                    {(["min", "half_pot", "three_quarter_pot", "pot", "max"] as RaisePresetKey[]).map((preset) => {
+                                        const amount = getRaisePresetAmount(preset, gameState, raiseDraft.action);
+                                        const isActive = amount === raiseDraft.amount;
 
-                                    return (
-                                        <button
-                                            key={preset}
-                                            type="button"
-                                            className={[
-                                                "raise-tray__preset",
-                                                isActive ? "is-active" : "",
-                                            ]
-                                                .filter(Boolean)
-                                                .join(" ")}
-                                            onClick={() => handleRaisePresetClick(preset)}
-                                        >
-                                            <span>{getRaisePresetLabel(preset)}</span>
-                                            <strong>${amount}</strong>
+                                        return (
+                                            <button
+                                                key={preset}
+                                                type="button"
+                                                className={[
+                                                    "raise-tray__preset",
+                                                    isActive ? "is-active" : "",
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(" ")}
+                                                onClick={() => handleRaisePresetClick(preset)}
+                                            >
+                                                <span>{getRaisePresetLabel(preset)}</span>
+                                                <strong>${amount}</strong>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="raise-tray__body">
+                                    <div className="raise-tray__amount">
+                                        <span>Raise to</span>
+                                        <strong>${raiseDraft.amount}</strong>
+                                    </div>
+
+                                    <input
+                                        aria-label="Raise amount"
+                                        className="raise-tray__slider"
+                                        type="range"
+                                        min={raiseDraft.action.minAmount ?? 0}
+                                        max={raiseDraft.action.maxAmount ?? raiseDraft.action.minAmount ?? 0}
+                                        step={1}
+                                        value={raiseDraft.amount}
+                                        onChange={handleRaiseAmountChange}
+                                    />
+
+                                    <div className="raise-tray__actions">
+                                        <button className="raise-tray__secondary-button" type="button" onClick={handleCancelRaise}>
+                                            Cancel
                                         </button>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="raise-tray__body">
-                                <div className="raise-tray__amount">
-                                    <span>Raise to</span>
-                                    <strong>${raiseDraft.amount}</strong>
-                                </div>
-
-                                <input
-                                    aria-label="Raise amount"
-                                    className="raise-tray__slider"
-                                    type="range"
-                                    min={raiseDraft.action.minAmount ?? 0}
-                                    max={raiseDraft.action.maxAmount ?? raiseDraft.action.minAmount ?? 0}
-                                    step={1}
-                                    value={raiseDraft.amount}
-                                    onChange={handleRaiseAmountChange}
-                                />
-
-                                <div className="raise-tray__actions">
-                                    <button className="raise-tray__secondary-button" type="button" onClick={handleCancelRaise}>
-                                        Cancel
-                                    </button>
-                                    <button className="raise-tray__primary-button" type="button" onClick={handleConfirmRaise}>
-                                        Confirm raise
-                                    </button>
+                                        <button className="raise-tray__primary-button" type="button" onClick={handleConfirmRaise}>
+                                            Confirm raise
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : null}
-                    <div className="table-actions__row">
-                        {legalActions.length > 0 ? (
-                            legalActions.map((action) => (
-                                <ActionButton
-                                    key={action.type}
-                                    action={action}
-                                    playerId={currentActor?.id ?? ""}
-                                    onAction={handleAction}
-                                    onOpenRaise={handleOpenRaise}
-                                />
-                            ))
-                        ) : (
-                            <p className="table-actions__empty">{emptyActionMessage}</p>
-                        )}
-                        {canStartNextHand ? (
-                            <button className="primary-button" type="button" onClick={handleNewHand}>
-                                Start new hand
-                            </button>
-                        ) : canRebuyHero ? (
-                            <button className="primary-button" type="button" onClick={handleRebuyAndStartNewHand}>
-                                Rebuy and start new hand
-                            </button>
                         ) : null}
-                    </div>
+                        <div className="table-actions__row">
+                            {legalActions.length > 0 ? (
+                                legalActions.map((action) => (
+                                    <ActionButton
+                                        key={action.type}
+                                        action={action}
+                                        playerId={currentActor?.id ?? ""}
+                                        onAction={handleAction}
+                                        onOpenRaise={handleOpenRaise}
+                                    />
+                                ))
+                            ) : (
+                                <p className="table-actions__empty">{emptyActionMessage}</p>
+                            )}
+                            {canStartNextHand ? (
+                                <button className="primary-button" type="button" onClick={handleNewHand}>
+                                    Start new hand
+                                </button>
+                            ) : canRebuyHero ? (
+                                <button className="primary-button" type="button" onClick={handleRebuyAndStartNewHand}>
+                                    Rebuy and start new hand
+                                </button>
+                            ) : null}
+                        </div>
+                    </section>
                 </section>
+
+                <CoachPanel gameState={gameState} />
             </section>
 
             <section className="dashboard">
@@ -1472,8 +1476,6 @@ export default function App() {
                         )}
                     </ul>
                 </article>
-
-                <CoachPanel gameState={gameState} />
 
                 {import.meta.env.DEV ? (
                     <DebugPanel
