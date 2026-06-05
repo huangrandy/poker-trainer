@@ -310,6 +310,65 @@ function createStreetRevealState(startHandImpl: typeof engine.startHand): GameSt
   });
 }
 
+function createPreflopAllInRunoutRevealState(): GameState {
+  const sample = createSampleGameState();
+
+  return {
+    ...sample,
+    handNumber: 27,
+    street: "preflop",
+    dealerSeatIndex: 0,
+    buttonSeatIndex: 0,
+    board: [],
+    players: sample.players.map((player) => {
+      if (player.id === "hero") {
+        return {
+          ...player,
+          stack: 1050,
+          holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 5,
+          totalCommittedThisHand: 5,
+          status: "active" as const,
+          hasActedThisStreet: false,
+        };
+      }
+
+      if (player.id === "bot-1") {
+        return {
+          ...player,
+          stack: 1400,
+          holeCards: [makeCard("9", "clubs"), makeCard("9", "spades")],
+          currentStreetBet: 10,
+          totalCommittedThisHand: 10,
+          status: "active" as const,
+          hasActedThisStreet: true,
+        };
+      }
+
+      return {
+        ...player,
+        stack: 0,
+        currentStreetBet: 0,
+        totalCommittedThisHand: 0,
+        status: "out" as const,
+        hasActedThisStreet: false,
+      };
+    }),
+    betting: {
+      currentBet: 10,
+      minRaiseTo: 20,
+      lastAggressorSeatIndex: 1,
+      currentActorSeatIndex: 0,
+    },
+    pot: {
+      mainPot: 15,
+      sidePots: [],
+    },
+    actionHistory: [],
+    lastHandResult: null,
+  };
+}
+
 describe("App", () => {
   it("keeps the center board height fixed as the board changes", () => {
     const emptyRender = render(<App />);
@@ -444,6 +503,14 @@ describe("App", () => {
     });
   });
 
+  it("shows call amounts in the action history", async () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
+
+    render(<App />);
+
+    expect(screen.getByText("Hero called $10")).toBeInTheDocument();
+  });
+
   it("keeps villain hole cards face down during the hand and dims folded cards", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
 
@@ -498,6 +565,56 @@ describe("App", () => {
     boardCards.forEach((card) => {
       expect(card).not.toHaveClass("table-card--face-down");
     });
+  });
+
+  it("replays an all-in runout one street at a time", async () => {
+    const realApplyAction = engine.applyAction;
+    const setupState = createPreflopAllInRunoutRevealState();
+    const afterHeroAllIn = realApplyAction(setupState, {
+      type: "all_in",
+      playerId: "hero",
+    });
+    const finalState = realApplyAction(afterHeroAllIn, {
+      type: "call",
+      playerId: "bot-1",
+    });
+
+    vi.spyOn(engine, "startHand").mockImplementation(() => setupState);
+    vi.spyOn(engine, "applyAction").mockImplementation((state, action) => {
+      if (state === setupState && action.type === "all_in" && action.playerId === "hero") {
+        return finalState;
+      }
+
+      return realApplyAction(state, action);
+    });
+    vi.useFakeTimers();
+
+    const { container } = render(<App />);
+
+    expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(0);
+    expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /All in/i }));
+    });
+
+    expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(5);
+    expect(container.querySelectorAll(".poker-table-scene__community .table-card--face-down")).toHaveLength(2);
+    expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(container.querySelectorAll(".poker-table-scene__community .table-card--face-down")).toHaveLength(1);
+    expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(container.querySelectorAll(".poker-table-scene__community .table-card--face-down")).toHaveLength(0);
+    expect(container.querySelector(".poker-table-scene__banner--winner")).not.toBeNull();
   });
 
   it("renders the legal actions in the table strip", () => {

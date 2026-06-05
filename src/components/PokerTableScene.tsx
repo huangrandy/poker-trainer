@@ -19,6 +19,7 @@ type PokerTableSceneProps = {
   potLabel: string;
   potAmount: number;
   showVillainHoleCards: boolean;
+  showHandRevealResult: boolean;
   visibleActionByPlayerId: Map<string, string>;
   handResultByPlayerId: Map<string, HandRevealPlayerResult>;
   highlightedCardKeys: Set<string>;
@@ -281,6 +282,7 @@ export function PokerTableScene({
   potLabel,
   potAmount,
   showVillainHoleCards,
+  showHandRevealResult,
   visibleActionByPlayerId,
   handResultByPlayerId,
   highlightedCardKeys,
@@ -375,11 +377,18 @@ export function PokerTableScene({
             width: boardCardsWidth * scale,
           }}
         >
-          {Array.from({ length: boardSlots }).map((_, index) => {
+        {Array.from({ length: boardSlots }).map((_, index) => {
             const card = board[index];
             const isFaceDown = streetReveal.active && index >= streetReveal.fromIndex;
-            const isHighlighted = card ? highlightedCardKeys.has(getCardKey(card)) : false;
-            const isMuted = Boolean(card && showVillainHoleCards && highlightedCardKeys.size > 0 && !isHighlighted);
+            const isHighlighted =
+              card && showHandRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false;
+            const isMuted = Boolean(
+              card &&
+                showHandRevealResult &&
+                showVillainHoleCards &&
+                highlightedCardKeys.size > 0 &&
+                !isHighlighted
+            );
 
             return card ? (
               <TableCard
@@ -412,7 +421,7 @@ export function PokerTableScene({
           const player = playerBySeatId.get(seat.id) ?? null;
           const isCurrentActor = player?.seatIndex === currentActorSeatIndex;
           const revealResult = player ? handResultByPlayerId.get(player.id) ?? null : null;
-          const showRevealResult = Boolean(showVillainHoleCards && revealResult);
+          const showRevealResult = Boolean(showVillainHoleCards && revealResult && showHandRevealResult);
           const showCardsFaceUp = player?.isHero || showVillainHoleCards;
           const shouldDimFoldedCards = Boolean(player && !showVillainHoleCards && player.status === "folded");
           const localRects = seatLocalRects[seat.layout.kind];

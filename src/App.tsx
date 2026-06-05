@@ -257,6 +257,22 @@ function getRaisePresetLabel(preset: RaisePresetKey): string {
     }
 }
 
+function getRunoutRevealTargets(previousStreet: GameState["street"]): number[] {
+    if (previousStreet === "preflop") {
+        return [3, 4, 5];
+    }
+
+    if (previousStreet === "flop") {
+        return [4, 5];
+    }
+
+    if (previousStreet === "turn") {
+        return [5];
+    }
+
+    return [];
+}
+
 function createInitialGameState(): GameState {
     return startHand(createSampleGameState());
 }
@@ -635,6 +651,7 @@ export default function App() {
     const handResult = gameState.lastHandResult;
     const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
     const showVillainHoleCards = gameState.street === "showdown" || handResult?.kind === "showdown";
+    const showHandRevealResult = handResult?.kind === "showdown" && !streetReveal.active;
     const centerPotLabel = isHandComplete ? "Pot awarded" : "Pot";
     const centerPotAmount = handResult?.potAwarded ?? gameState.pot.mainPot;
     const handResultByPlayerId = useMemo(
@@ -790,6 +807,61 @@ export default function App() {
         if (previousStreet === gameState.street) {
             setTableLocked(false);
             setStreetReveal({ active: false, fromIndex: gameState.board.length });
+            return;
+        }
+
+        const isAllInRunoutReveal =
+            gameState.street === "hand_complete" &&
+            handResult?.kind === "showdown" &&
+            previousStreet !== gameState.street &&
+            previousBoardLength < gameState.board.length;
+
+        const runoutRevealTargets = getRunoutRevealTargets(previousStreet);
+
+        if (isAllInRunoutReveal && runoutRevealTargets.length > 0) {
+            setBlindActionLabels(new Map());
+            streetRevealActiveRef.current = true;
+            const previousStreetActions = buildVisibleActionLabelsForStreet(gameState, previousStreet);
+
+            setTableActionLabels(previousStreetActions);
+            setTableLocked(true);
+            setStreetReveal({
+                active: true,
+                fromIndex: runoutRevealTargets[0],
+            });
+
+            let nextRevealIndex = 1;
+
+            const revealNextStreetCard = () => {
+                if (nextRevealIndex < runoutRevealTargets.length) {
+                    setStreetReveal({
+                        active: true,
+                        fromIndex: runoutRevealTargets[nextRevealIndex],
+                    });
+                    nextRevealIndex += 1;
+
+                    if (nextRevealIndex < runoutRevealTargets.length) {
+                        revealTimerRef.current = window.setTimeout(
+                            revealNextStreetCard,
+                            STREET_REVEAL_DELAY_MS
+                        );
+                        return;
+                    }
+                }
+
+                streetRevealActiveRef.current = false;
+                setTableActionLabels(visibleActionByPlayerId);
+                setTableLocked(false);
+                setStreetReveal({
+                    active: false,
+                    fromIndex: gameState.board.length,
+                });
+                revealTimerRef.current = null;
+            };
+
+            revealTimerRef.current = window.setTimeout(revealNextStreetCard, STREET_REVEAL_DELAY_MS);
+            lastStreetRef.current = gameState.street;
+            lastBoardLengthRef.current = gameState.board.length;
             return;
         }
 
@@ -962,6 +1034,22 @@ export default function App() {
         }));
     }
 
+    function handlePlayerHoleCardsChange(playerId: string, holeCards: Card[]) {
+        setGameState((previous) => ({
+            ...previous,
+            players: previous.players.map((player) => {
+                if (player.id !== playerId) {
+                    return player;
+                }
+
+                return {
+                    ...player,
+                    holeCards: holeCards.map((card) => ({ ...card })),
+                };
+            }),
+        }));
+    }
+
     function handleStepBotOnce() {
         if (botAutoplayEnabled) {
             return;
@@ -1019,12 +1107,13 @@ export default function App() {
                 </div>
 
                 <div className="table-stage table-stage--demo">
-                    <PokerTableScene
+        <PokerTableScene
                         players={gameState.players}
                         board={gameState.board}
                         potLabel={centerPotLabel}
                         potAmount={centerPotAmount}
                         showVillainHoleCards={shouldRevealAllCards}
+                        showHandRevealResult={showHandRevealResult}
                         visibleActionByPlayerId={sceneActionLabels}
                         handResultByPlayerId={handResultByPlayerId}
                         highlightedCardKeys={highlightedCardKeys}
@@ -1179,6 +1268,7 @@ export default function App() {
                         onToggleBotAutoplay={() => setBotAutoplayEnabled((previous) => !previous)}
                         onStepBot={handleStepBotOnce}
                         onPlayerPersonaChange={handlePlayerPersonaChange}
+                        onPlayerHoleCardsChange={handlePlayerHoleCardsChange}
                     />
                 ) : null}
             </section>
