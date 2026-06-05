@@ -1,5 +1,6 @@
 import { applyAction, getLegalActions } from "../game-engine/engine";
 import type { GameState, LegalAction, PlayerAction, PlayerState } from "../game-engine/types";
+import { chooseBotActionProfiled } from "./personas";
 
 function getCurrentActor(state: GameState): PlayerState | undefined {
   if (state.betting.currentActorSeatIndex === null) {
@@ -51,6 +52,14 @@ export function chooseSimpleBotAction(legalActions: LegalAction[]): PlayerAction
   return null;
 }
 
+export function chooseBotActionForPlayer(
+  state: GameState,
+  player: PlayerState,
+  legalActions: LegalAction[]
+): PlayerAction | null {
+  return chooseBotActionProfiled(state, player, legalActions) ?? chooseSimpleBotAction(legalActions);
+}
+
 type AdvanceBotTurnsOptions = {
   maxSteps?: number;
 };
@@ -70,7 +79,7 @@ export function advanceBotTurns(
     }
 
     const legalActions = getLegalActions(nextState, currentActor.id);
-    const chosenAction = chooseSimpleBotAction(legalActions);
+    const chosenAction = chooseBotActionForPlayer(nextState, currentActor, legalActions);
 
     if (!chosenAction) {
       return nextState;

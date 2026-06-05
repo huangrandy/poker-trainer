@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { PokerTableScene } from "./components/PokerTableScene";
-import { advanceBotTurns } from "./features/bots";
+import { DebugPanel } from "./components/DebugPanel";
+import { advanceBotTurns, type BotPersonaId } from "./features/bots";
 import {
     applyAction,
     getLegalActions,
@@ -586,6 +587,8 @@ export default function App() {
     const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() => new Map());
     const [blindActionLabels, setBlindActionLabels] = useState<Map<string, string>>(() => new Map());
     const [raiseDraft, setRaiseDraft] = useState<{ action: RaiseLegalAction; amount: number } | null>(null);
+    const [debugRevealAllCards, setDebugRevealAllCards] = useState(false);
+    const [botAutoplayEnabled, setBotAutoplayEnabled] = useState(true);
     const [tableLocked, setTableLocked] = useState(true);
     const [streetReveal, setStreetReveal] = useState({
         active: false,
@@ -817,7 +820,13 @@ export default function App() {
             botTimerRef.current = null;
         }
 
-        if (tableLocked || streetReveal.active || currentActor === null || !currentActor.isBot) {
+        if (
+            !botAutoplayEnabled ||
+            tableLocked ||
+            streetReveal.active ||
+            currentActor === null ||
+            !currentActor.isBot
+        ) {
             return;
         }
 
@@ -832,7 +841,7 @@ export default function App() {
                 botTimerRef.current = null;
             }
         };
-    }, [currentActor, streetReveal.active, tableLocked, gameState.handNumber, gameState.street]);
+    }, [botAutoplayEnabled, currentActor, streetReveal.active, tableLocked, gameState.handNumber, gameState.street]);
 
     const restartablePlayers = gameState.players.filter(
         (player) => player.status !== "out" && player.stack > 0
@@ -921,6 +930,30 @@ export default function App() {
         setRaiseDraft(null);
     }
 
+    function handlePlayerPersonaChange(playerId: string, botPersonaId: BotPersonaId) {
+        setGameState((previous) => ({
+            ...previous,
+            players: previous.players.map((player) => {
+                if (player.id !== playerId) {
+                    return player;
+                }
+
+                return {
+                    ...player,
+                    botPersonaId,
+                };
+            }),
+        }));
+    }
+
+    function handleStepBotOnce() {
+        if (botAutoplayEnabled) {
+            return;
+        }
+
+        setGameState((previous) => advanceBotTurns(previous, { maxSteps: 1 }));
+    }
+
     function handleNewHand() {
         if (!canStartNextHand) {
             return;
@@ -946,6 +979,7 @@ export default function App() {
     }
 
     const activePlayers = gameState.players.filter((player) => player.status !== "out");
+    const shouldRevealAllCards = debugRevealAllCards || showVillainHoleCards;
 
     return (
         <main className="app-shell">
@@ -974,7 +1008,7 @@ export default function App() {
                         board={gameState.board}
                         potLabel={centerPotLabel}
                         potAmount={centerPotAmount}
-                        showVillainHoleCards={showVillainHoleCards}
+                        showVillainHoleCards={shouldRevealAllCards}
                         visibleActionByPlayerId={sceneActionLabels}
                         handResultByPlayerId={handResultByPlayerId}
                         highlightedCardKeys={highlightedCardKeys}
@@ -1118,6 +1152,19 @@ export default function App() {
                         )}
                     </ul>
                 </article>
+
+                {import.meta.env.DEV ? (
+                    <DebugPanel
+                        players={gameState.players}
+                        currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
+                        revealAllCards={debugRevealAllCards}
+                        botAutoplayEnabled={botAutoplayEnabled}
+                        onToggleRevealAllCards={() => setDebugRevealAllCards((previous) => !previous)}
+                        onToggleBotAutoplay={() => setBotAutoplayEnabled((previous) => !previous)}
+                        onStepBot={handleStepBotOnce}
+                        onPlayerPersonaChange={handlePlayerPersonaChange}
+                    />
+                ) : null}
             </section>
         </main>
     );

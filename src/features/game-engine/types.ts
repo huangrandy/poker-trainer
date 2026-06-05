@@ -1,3 +1,5 @@
+import type { BotPersonaId } from "../bots/personas";
+
 export type Suit = "clubs" | "diamonds" | "hearts" | "spades";
 
 export type Rank =
@@ -45,6 +47,7 @@ export type PlayerState = {
   seatIndex: SeatIndex;
   isHero: boolean;
   isBot: boolean;
+  botPersonaId?: BotPersonaId;
   stack: number;
   holeCards: Card[];
   currentStreetBet: number;

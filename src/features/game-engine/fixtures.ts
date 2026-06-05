@@ -21,6 +21,7 @@ const players: PlayerState[] = [
     seatIndex: 1,
     isHero: false,
     isBot: true,
+    botPersonaId: "tag",
     stack: 1000,
     holeCards: [],
     currentStreetBet: 0,

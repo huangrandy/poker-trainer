@@ -733,7 +733,7 @@ textarea {
 
 .dashboard {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 16px;
 }
 
@@ -748,6 +748,87 @@ textarea {
     align-items: baseline;
     gap: 12px;
     margin-bottom: 16px;
+}
+
+.debug-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.debug-panel__summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.debug-panel__summary div,
+.debug-panel__player {
+    padding: 12px 14px;
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.debug-panel__summary span,
+.debug-panel__player small,
+.debug-panel__note,
+.debug-panel__hint {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.82rem;
+}
+
+.debug-panel__summary strong,
+.debug-panel__player-name {
+    display: block;
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 1rem;
+}
+
+.debug-panel__toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.debug-panel__players {
+    display: grid;
+    gap: 12px;
+}
+
+.debug-panel__player {
+    display: grid;
+    gap: 10px;
+}
+
+.debug-panel__player-name {
+    margin-top: 0;
+    font-weight: 600;
+}
+
+.debug-panel__select {
+    width: 100%;
+    min-width: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(3, 7, 18, 0.72);
+    color: #f8fafc;
+    padding: 11px 14px;
+}
+
+.debug-panel__select:focus-visible {
+    outline: 2px solid rgba(125, 211, 252, 0.7);
+    outline-offset: 2px;
+}
+
+.debug-panel__hint {
+    color: #cbd5e1;
+}
+
+.debug-panel__note {
+    margin: 0;
+    line-height: 1.4;
 }
 
 .action-row {
@@ -926,6 +1007,10 @@ textarea {
     }
 
     .state-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .debug-panel__summary {
         grid-template-columns: 1fr;
     }
 
