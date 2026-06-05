@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { getLegalActions } from "../features/game-engine/engine";
 import type { GameState } from "../features/game-engine/types";
 
@@ -49,25 +49,31 @@ function buildMessage(role: CoachMessage["role"], text: string, extras: Omit<Coa
     };
 }
 
+function SendIcon() {
+    return (
+        <svg aria-hidden="true" viewBox="0 0 20 20" className="coach-panel__button-icon">
+            <path d="M3.5 10l12.5-6-4.2 6 4.2 6-12.5-6z" fill="currentColor" />
+        </svg>
+    );
+}
+
+function ResetIcon() {
+    return (
+        <svg aria-hidden="true" viewBox="0 0 20 20" className="coach-panel__button-icon">
+            <path
+                d="M10 4a6 6 0 1 1-4.24 10.24l1.1-1.1A4.5 4.5 0 1 0 10 5.5V8L6.5 4.5 10 1v3z"
+                fill="currentColor"
+            />
+        </svg>
+    );
+}
+
 export function CoachPanel({ gameState }: CoachPanelProps) {
     const [prompt, setPrompt] = useState(getDefaultPrompt);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [messages, setMessages] = useState<CoachMessage[]>([]);
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    const currentActor = useMemo(
-        () => gameState.players.find((player) => player.seatIndex === gameState.betting.currentActorSeatIndex) ?? null,
-        [gameState.betting.currentActorSeatIndex, gameState.players]
-    );
-
-    const legalActionCount = useMemo(() => {
-        if (!currentActor) {
-            return 0;
-        }
-
-        return getLegalActions(gameState, currentActor.id).length;
-    }, [currentActor, gameState]);
 
     async function handleAskCoach() {
         const trimmedPrompt = prompt.trim();
@@ -85,7 +91,7 @@ export function CoachPanel({ gameState }: CoachPanelProps) {
             const response = await fetch(`${COACH_SERVER_URL}/api/coach`, {
                 method: "POST",
                 headers: {
-                    "content-type": "text/plain;charset=UTF-8",
+                    "content-type": "application/json",
                 },
                 body: JSON.stringify(createCoachRequest(gameState, trimmedPrompt, sessionId)),
             });
@@ -133,21 +139,10 @@ export function CoachPanel({ gameState }: CoachPanelProps) {
 
     return (
         <article className="panel coach-panel" aria-label="Coach panel">
-            <div className="panel__header">
+            {/* <div className="panel__header">
                 <h2>Coach</h2>
                 <span>{sessionId ? `Thread ${sessionId.slice(0, 12)}` : "New session"}</span>
-            </div>
-
-            <div className="coach-panel__meta">
-                <div>
-                    <span>Current actor</span>
-                    <strong>{currentActor?.name ?? "None"}</strong>
-                </div>
-                <div>
-                    <span>Legal actions</span>
-                    <strong>{legalActionCount}</strong>
-                </div>
-            </div>
+            </div> */}
 
             <label className="coach-panel__prompt">
                 <span>Prompt</span>
@@ -160,11 +155,24 @@ export function CoachPanel({ gameState }: CoachPanelProps) {
             </label>
 
             <div className="coach-panel__actions">
-                <button className="primary-button" type="button" onClick={handleAskCoach} disabled={isSending}>
-                    {isSending ? "Asking..." : "Ask coach"}
+                <button
+                    className="coach-panel__icon-button coach-panel__icon-button--ghost"
+                    type="button"
+                    onClick={handleResetCoach}
+                    aria-label="Reset coach"
+                    title="Reset coach"
+                >
+                    <ResetIcon />
                 </button>
-                <button className="coach-panel__ghost-button" type="button" onClick={handleResetCoach}>
-                    Reset coach
+                <button
+                    className="coach-panel__icon-button coach-panel__icon-button--primary"
+                    type="button"
+                    onClick={handleAskCoach}
+                    disabled={isSending}
+                    aria-label={isSending ? "Asking coach" : "Ask coach"}
+                    title={isSending ? "Asking coach" : "Ask coach"}
+                >
+                    {isSending ? <span className="coach-panel__spinner" aria-hidden="true" /> : <SendIcon />}
                 </button>
             </div>
 
@@ -190,11 +198,7 @@ export function CoachPanel({ gameState }: CoachPanelProps) {
                             ) : null}
                         </article>
                     ))
-                ) : (
-                    <p className="coach-panel__empty">
-                        Ask about the current hand to get theory-aligned feedback.
-                    </p>
-                )}
+                ) : ""}
             </div>
         </article>
     );

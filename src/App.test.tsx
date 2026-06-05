@@ -746,7 +746,6 @@ describe("App", () => {
     expect(parsedBody.snapshot.heroPlayerId).toBe("hero");
 
     expect(await screen.findByText("Three-bet AKs for value.")).toBeInTheDocument();
-    expect(screen.getByText("Thread thread-abc12")).toBeInTheDocument();
   });
 
   it("opens a raise tray and confirms a sized raise", async () => {
