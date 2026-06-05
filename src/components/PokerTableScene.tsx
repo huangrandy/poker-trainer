@@ -274,7 +274,7 @@ const EMPTY_SEAT_AVATAR_BACKGROUND = "rgba(148, 163, 184, 0.12)";
 const EMPTY_SEAT_AVATAR_BORDER = "rgba(148, 163, 184, 0.2)";
 const CURRENT_SEAT_BANNER_BACKGROUND =
   "linear-gradient(180deg, rgba(44, 35, 7, 0.98), rgba(18, 14, 4, 0.98))";
-const MAX_TABLE_SCENE_WIDTH = 1260;
+const MAX_TABLE_SCENE_WIDTH = 1160;
 
 export function PokerTableScene({
   players,

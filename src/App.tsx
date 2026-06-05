@@ -967,12 +967,12 @@ export default function App() {
             : streetReveal.active
                 ? "Dealing the next street..."
                 : gameState.street === "hand_complete"
-            ? canStartNextHand
-                ? "Hand complete. Start a new hand to continue."
-                : canRebuyHero
-                    ? "Hand complete. Rebuy the hero to continue."
-                    : "Hand complete. Not enough players remain to start a new hand."
-                : "No legal actions available right now.";
+                    ? canStartNextHand
+                        ? "Hand complete. Start a new hand to continue."
+                        : canRebuyHero
+                            ? "Hand complete. Rebuy the hero to continue."
+                            : "Hand complete. Not enough players remain to start a new hand."
+                    : "No legal actions available right now.";
 
     function handleAction(action: PlayerAction) {
         if (tableLocked) {
@@ -1150,7 +1150,7 @@ export default function App() {
                 </div>
 
                 <div className="table-stage table-stage--demo">
-        <PokerTableScene
+                    <PokerTableScene
                         players={gameState.players}
                         board={gameState.board}
                         potLabel={centerPotLabel}

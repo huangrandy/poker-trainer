@@ -119,10 +119,16 @@ describe("simple bot", () => {
     });
   });
 
-  it("keeps inactive future personas on TAG for now", () => {
+  it("uses the general persona when selected", () => {
+    const { bot } = createBotDecisionState("general");
+
+    expect(getBotPersonaProfile(bot.botPersonaId).id).toBe("general");
+  });
+
+  it("uses the nit persona when selected", () => {
     const { bot } = createBotDecisionState("nit");
 
-    expect(getBotPersonaProfile(bot.botPersonaId).id).toBe("tag");
+    expect(getBotPersonaProfile(bot.botPersonaId).id).toBe("nit");
   });
 
   it("auto-advances bot turns until the hero is next", () => {

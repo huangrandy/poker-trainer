@@ -106,7 +106,7 @@ describe("TAG bot", () => {
     expect(normalizeBotPersonaId("tag")).toBe("tag");
     expect(normalizeBotPersonaId("missing")).toBe("tag");
     expect(getBotPersonaProfile("tag").id).toBe("tag");
-    expect(getBotPersonaProfile("nit").id).toBe("tag");
+    expect(getBotPersonaProfile("nit").id).toBe("nit");
   });
 
   it("checks trash holdings when no one has bet", () => {

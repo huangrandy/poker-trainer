@@ -252,7 +252,7 @@ export function DebugPanel({
             </div>
 
             <p className="debug-panel__note">
-                Future personas still resolve to the active TAG behavior until their strategy is enabled.
+                Disabled personas still resolve to the active TAG behavior until their strategy is enabled.
             </p>
         </article>
     );
