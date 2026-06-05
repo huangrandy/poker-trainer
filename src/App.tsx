@@ -145,7 +145,7 @@ function buildBlindRevealActions(state: GameState): Array<{ playerId: string; la
         })
         .map((player, index) => ({
             playerId: player.id,
-            label: `${index === 0 ? "Small blind" : "Big blind"} $${player.currentStreetBet}`,
+            label: `${index === 0 ? "SB" : "BB"} $${player.currentStreetBet}`,
         }));
 }
 
