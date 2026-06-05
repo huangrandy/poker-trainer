@@ -58,14 +58,10 @@ const DESIGN = {
     seatUnitHeight: 220,
     seatWidth: 328,
     seatHeight: 132,
-    cardWidth: 82,
-    cardHeight: 118,
+    cardWidth: 100,
+    cardHeight: 128,
     cardGap: 16,
-    communityCardWidth: 92,
-    communityCardHeight: 138,
-    communityCardGap: 18,
-    potWidth: 232,
-    potHeight: 72,
+    communityCardGap: 20,
 } as const;
 
 const SEATS: SeatSlot[] = [
@@ -108,16 +104,16 @@ const SEATS: SeatSlot[] = [
 ];
 
 const seatLocalRects = {
-  center: {
-    banner: { left: 22, top: 64, width: 336, height: 132 },
-    cards: { left: 100, top: 0, width: 180, height: 118 },
-    action: { left: 122, top: 230, width: 136, height: 40 },
-  },
-  side: {
-    banner: { left: 20, top: 64, width: 340, height: 132 },
-    cards: { left: 8, top: 6, width: 180, height: 118 },
-    action: { left: 375, top: 50, width: 136, height: 40 },
-  },
+    center: {
+        banner: { left: 22, top: 64, width: 336, height: 132 },
+        cards: { left: 100, top: 0, width: 180, height: 118 },
+        action: { left: 122, top: 230, width: 136, height: 40 },
+    },
+    side: {
+        banner: { left: 20, top: 64, width: 340, height: 132 },
+        cards: { left: 8, top: 6, width: 180, height: 118 },
+        action: { left: 375, top: 50, width: 136, height: 40 },
+    },
 } as const;
 
 function useMeasuredScale(containerRef: RefObject<HTMLElement | null>) {
@@ -319,7 +315,7 @@ export function PokerTableScene({
 
     const boardSlots = 5;
     const boardCardsWidth =
-        boardSlots * DESIGN.communityCardWidth + (boardSlots - 1) * DESIGN.communityCardGap;
+        boardSlots * DESIGN.cardWidth + (boardSlots - 1) * DESIGN.communityCardGap;
 
     return (
         <div
@@ -360,9 +356,9 @@ export function PokerTableScene({
                     className="poker-table-scene__pot"
                     style={{
                         ...styles.pot,
-                        width: DESIGN.potWidth * scale,
-                        height: DESIGN.potHeight * scale,
                         top: 314 * scale,
+                        minWidth: 72 * scale,
+                        padding: `${12 * scale}px ${32 * scale}px`,
                     }}
                 >
                     <span style={{ ...styles.potLabel, fontSize: `${11 * scale}px` }}>
@@ -404,8 +400,8 @@ export function PokerTableScene({
                                 isHighlighted={isHighlighted}
                                 isMuted={isMuted}
                                 style={{
-                                    width: DESIGN.communityCardWidth * scale,
-                                    height: DESIGN.communityCardHeight * scale,
+                                    width: DESIGN.cardWidth * scale,
+                                    height: DESIGN.cardHeight * scale,
                                     borderRadius: "12px",
                                 }}
                             />
@@ -414,8 +410,8 @@ export function PokerTableScene({
                                 key={`community-empty-${index}`}
                                 style={{
                                     ...styles.communityCard,
-                                    width: DESIGN.communityCardWidth * scale,
-                                    height: DESIGN.communityCardHeight * scale,
+                                    width: DESIGN.cardWidth * scale,
+                                    height: DESIGN.cardHeight * scale,
                                 }}
                             />
                         );
@@ -437,12 +433,14 @@ export function PokerTableScene({
                         seat.layout.flipX,
                         seat.layout.flipY
                     );
-                    const cardsWidth = DESIGN.cardWidth * 2 + DESIGN.cardGap;
+                    const holeCardWidth = DESIGN.cardWidth;
+                    const holeCardHeight = DESIGN.cardHeight;
+                    const cardsWidth = holeCardWidth * 2 + DESIGN.cardGap;
                     const cardsRect = {
                         left: bannerRect.left + (bannerRect.width - cardsWidth) / 2,
-                        top: bannerRect.top - DESIGN.cardHeight + 20,
+                        top: bannerRect.top - holeCardHeight + 20,
                         width: cardsWidth,
-                        height: DESIGN.cardHeight,
+                        height: holeCardHeight,
                     };
                     const actionRect = mirrorRect(
                         localRects.action,
@@ -506,9 +504,9 @@ export function PokerTableScene({
                                                     : shouldDimFoldedCards
                                             }
                                             style={{
-                                                width: DESIGN.cardWidth * scale,
-                                                height: DESIGN.cardHeight * scale,
-                                                borderRadius: "10px",
+                                                width: holeCardWidth * scale,
+                                                height: holeCardHeight * scale,
+                                                borderRadius: "12px",
                                             }}
                                         />
                                     ))}
@@ -705,12 +703,12 @@ const styles = {
         borderRadius: "18px",
         background: "rgba(0,0,0,0.22)",
         border: "1px solid rgba(255,255,255,0.08)",
-        display: "grid",
+        display: "inline-grid",
         placeItems: "center",
         alignContent: "center",
         gap: "2px",
-        padding: "10px 20px",
         zIndex: 2,
+        width: "fit-content",
         minWidth: 0,
         boxSizing: "border-box" as const,
     },
