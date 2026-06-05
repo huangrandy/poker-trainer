@@ -566,7 +566,7 @@ export function PokerTableScene({
                   <div
                     style={{
                       ...styles.seatLabel,
-                      fontSize: `${20 * scale}px`,
+                      fontSize: `${30 * scale}px`,
                     }}
                   >
                     {player?.name ?? seat.label}
@@ -575,7 +575,7 @@ export function PokerTableScene({
                         style={{
                           ...styles.currentBadge,
                           marginLeft: 8 * scale,
-                          fontSize: `${12 * scale}px`,
+                          fontSize: `${15 * scale}px`,
                         }}
                       >
                         Current
@@ -585,7 +585,7 @@ export function PokerTableScene({
                   <div
                     style={{
                       ...styles.seatStack,
-                      fontSize: `${16 * scale}px`,
+                      fontSize: `${24 * scale}px`,
                     }}
                   >
                     {player ? `$${player.stack}` : "Empty seat"}
@@ -602,7 +602,9 @@ export function PokerTableScene({
                       fontSize: `${11 * scale}px`,
                     }}
                   >
-                    <span className="poker-table-scene__hand-tooltip-label">Hand</span>
+                    <span className="poker-table-scene__hand-tooltip-label">
+                      {revealResult.handLabel}
+                    </span>
                     <div
                       className="poker-table-scene__hand-tooltip-content"
                       style={{
@@ -610,7 +612,7 @@ export function PokerTableScene({
                         fontSize: `${11 * scale}px`,
                       }}
                     >
-                      {revealResult.handLabel}
+                      {player?.name ?? seat.label}
                     </div>
                   </div>
                 ) : null}
@@ -714,7 +716,7 @@ const styles = {
   },
   seatText: {
     display: "grid",
-    gap: "8px",
+    gap: "4px",
     minWidth: 0,
   },
   seatLabel: {

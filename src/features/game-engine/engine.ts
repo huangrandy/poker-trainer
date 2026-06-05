@@ -204,23 +204,23 @@ function buildHandLabel(rank: HandRank): string {
 
   switch (rank.category) {
     case 8:
-      return `Straight flush, ${getRankLabel(first)} high`;
+      return `${getRankLabel(first)} straight flush`;
     case 7:
-      return `Four of a kind, ${getRankWord(first)} with ${getRankLabel(second)} kicker`;
+      return `${getRankLabel(first)} quads + kicker`;
     case 6:
-      return `Full house, ${getRankWord(first)} full of ${getRankWord(second)}`;
+      return `${getRankLabel(first)} full house`;
     case 5:
-      return `Flush, ${getRankLabel(first)} high`;
+      return `${getRankLabel(first)} flush`;
     case 4:
-      return `Straight, ${getRankLabel(first)} high`;
+      return `${getRankLabel(first)} straight`;
     case 3:
-      return `Three of a kind, ${getRankWord(first)} with ${getRankLabel(second)} and ${getRankLabel(third)} kickers`;
+      return `${getRankLabel(first)} trips + kicker`;
     case 2:
-      return `Two pair, ${getRankWord(first)} and ${getRankWord(second)} with ${getRankLabel(third)} kicker`;
+      return `2 pair (${getRankLabel(first)}, ${getRankLabel(second)})`;
     case 1:
-      return `Pair of ${getRankWord(first)} with ${getRankLabel(second)}, ${getRankLabel(third)} and ${getRankLabel(rank.tiebreakers[3] ?? 0)} kickers`;
+      return `${getRankLabel(first)} pair + kicker`;
     default:
-      return `High card ${getRankLabel(first)}`;
+      return `${getRankLabel(first)} high`;
   }
 }
 

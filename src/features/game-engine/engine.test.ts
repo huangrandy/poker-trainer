@@ -308,7 +308,7 @@ describe("engine basics", () => {
     expect(finished.lastHandResult?.potAwarded).toBe(25);
     expect(finished.lastHandResult?.winnerIds).toEqual(["hero"]);
     expect(finished.lastHandResult?.playerResults.find((player) => player.playerId === "hero")?.handLabel).toContain(
-      "Straight"
+      "straight"
     );
     expect(finished.lastHandResult?.playerResults.find((player) => player.playerId === "hero")?.cardsUsed).toHaveLength(5);
   });
@@ -382,10 +382,10 @@ describe("engine basics", () => {
     expect(finished.lastHandResult?.winnerIds).toEqual(["hero", "bot-1"]);
     expect(
       finished.lastHandResult?.playerResults.find((player) => player.playerId === "hero")?.handLabel
-    ).toContain("Two pair");
+    ).toContain("2 pair");
     expect(
       finished.lastHandResult?.playerResults.find((player) => player.playerId === "bot-1")?.handLabel
-    ).toContain("Two pair");
+    ).toContain("2 pair");
   });
 
   it("rebuying the hero restores chips for the next hand", () => {
