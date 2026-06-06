@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CoachPanel } from "./components/CoachPanel";
 import { PokerTableScene } from "./components/PokerTableScene";
 import { DebugPanel } from "./components/DebugPanel";
+import { TableCard } from "./components/TableCard";
 import { advanceBotTurns, type BotPersonaId } from "./features/bots";
 import {
     applyAction,
@@ -20,38 +21,8 @@ import type {
     PlayerState,
 } from "./features/game-engine/types";
 
-function formatCardLabel(rank: string, suit: string): string {
-    const suitSymbols: Record<string, string> = {
-        clubs: "♣",
-        diamonds: "♦",
-        hearts: "♥",
-        spades: "♠",
-    };
-
-    return `${rank}${suitSymbols[suit] ?? suit}`;
-}
-
 function getCardKey(card: Card): string {
     return `${card.rank}:${card.suit}`;
-}
-
-function getSuitSymbol(suit: string): string {
-    const suitSymbols: Record<string, string> = {
-        clubs: "♣",
-        diamonds: "♦",
-        hearts: "♥",
-        spades: "♠",
-    };
-
-    return suitSymbols[suit] ?? suit;
-}
-
-function getSuitTone(suit: string): string {
-    if (suit === "diamonds" || suit === "hearts") {
-        return "red";
-    }
-
-    return "black";
 }
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
@@ -608,44 +579,6 @@ function savePersistedDebugSettings(settings: PersistedDebugSettings): void {
     window.localStorage.setItem(DEBUG_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
 }
 
-function TableCard({
-    rank,
-    suit,
-    isHighlighted = false,
-    isMuted = false,
-    isFaceDown = false,
-}: {
-    rank: string;
-    suit: string;
-    isHighlighted?: boolean;
-    isMuted?: boolean;
-    isFaceDown?: boolean;
-}) {
-    return (
-        <span
-            aria-label={formatCardLabel(rank, suit)}
-            className={[
-                "table-card",
-                `table-card--${getSuitTone(suit)}`,
-                isFaceDown ? "table-card--face-down" : "",
-                isHighlighted ? "table-card--highlighted" : "",
-                isMuted ? "table-card--muted" : "",
-            ]
-                .filter(Boolean)
-                .join(" ")}
-            data-face-down={isFaceDown ? "true" : "false"}
-        >
-            <span className="table-card__inner">
-                <span className="table-card__face table-card__face--front">
-                    <span className="table-card__rank">{rank}</span>
-                    <span className="table-card__suit">{getSuitSymbol(suit)}</span>
-                </span>
-                <span className="table-card__face table-card__face--back" aria-hidden="true" />
-            </span>
-        </span>
-    );
-}
-
 function SeatCard({
     player,
     isCurrentActor,
@@ -693,6 +626,7 @@ function SeatCard({
                             key={`${player.id}-${card.rank}-${card.suit}-${index}`}
                             rank={card.rank}
                             suit={card.suit}
+                            cardRadius={16}
                             isHighlighted={isHandComplete && revealResult ? cardIsHighlighted(card) : false}
                             isMuted={isHandComplete && revealResult ? !cardIsHighlighted(card) : false}
                         />

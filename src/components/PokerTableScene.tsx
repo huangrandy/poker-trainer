@@ -2,6 +2,7 @@
 
 import type { CSSProperties, RefObject } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { TableCard } from "./TableCard";
 import type {
     Card,
     HandRevealPlayerResult,
@@ -66,8 +67,8 @@ const DESIGN = {
 } as const;
 
 const HOLE_CARD_FAN = [
-    { rotate: -7, translateY: 2 },
-    { rotate: 7, translateY: -2 },
+    { rotate: -7, translateY: 0 },
+    { rotate: 7, translateY: 0 },
 ] as const;
 const HOLE_CARD_OVERLAP = 14;
 
@@ -190,79 +191,8 @@ function mirrorRect(
     };
 }
 
-function getSuitSymbol(suit: string) {
-    const suitSymbols: Record<string, string> = {
-        clubs: "♣",
-        diamonds: "♦",
-        hearts: "♥",
-        spades: "♠",
-    };
-
-    return suitSymbols[suit] ?? suit;
-}
-
-function getSuitTone(suit: string) {
-    if (suit === "diamonds" || suit === "hearts") {
-        return "red";
-    }
-
-    return "black";
-}
-
-function formatCardLabel(rank: string, suit: string) {
-    return `${rank}${getSuitSymbol(suit)}`;
-}
-
 function getCardKey(card: Card) {
     return `${card.rank}:${card.suit}`;
-}
-
-function TableCard({
-    rank,
-    suit,
-    style,
-    cardRadius,
-    scale = 1,
-    isFaceDown = false,
-    isHighlighted = false,
-    isMuted = false,
-}: {
-    rank: string;
-    suit: string;
-    style?: CSSProperties;
-    cardRadius: number;
-    scale?: number;
-    isFaceDown?: boolean;
-    isHighlighted?: boolean;
-    isMuted?: boolean;
-}) {
-    return (
-        <span
-            aria-label={formatCardLabel(rank, suit)}
-            className={[
-                "table-card",
-                `table-card--${getSuitTone(suit)}`,
-                isFaceDown ? "table-card--face-down" : "",
-                isHighlighted ? "table-card--highlighted" : "",
-                isMuted ? "table-card--muted" : "",
-            ]
-                .filter(Boolean)
-                .join(" ")}
-            style={{ ...style, "--card-radius": `${cardRadius}px` } as CSSProperties}
-        >
-            <span className="table-card__inner">
-                <span className="table-card__face table-card__face--front">
-                    <span className="table-card__rank" style={{ fontSize: `${2.1 * scale}rem` }}>
-                        {rank}
-                    </span>
-                    <span className="table-card__suit" style={{ fontSize: `${1.7 * scale}rem` }}>
-                        {getSuitSymbol(suit)}
-                    </span>
-                </span>
-                <span className="table-card__face table-card__face--back" aria-hidden="true" />
-            </span>
-        </span>
-    );
 }
 
 function buildSeatOccupants(players: PlayerState[]) {
