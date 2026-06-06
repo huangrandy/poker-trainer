@@ -294,12 +294,27 @@ describe("bot persona distributions", () => {
 
   it("smokes a longer bot sequence across preflop and flop before returning to the hero", () => {
     const started = startHand(createSampleGameState(), { random: () => 0 });
-    const heroCall = applyAction(started, {
-      type: "call",
+    const pressured = {
+      ...started,
+      players: started.players.map((player) => {
+        if (player.id === "bot-1") {
+          return {
+            ...player,
+            holeCards: [makeCard("T", "spades"), makeCard("T", "hearts")],
+          };
+        }
+
+        return player;
+      }),
+    };
+
+    const heroRaise = applyAction(pressured, {
+      type: "raise",
       playerId: "hero",
+      amount: 20,
     });
 
-    const preflopAdvanced = advanceBotTurns(heroCall, { maxSteps: 4 });
+    const preflopAdvanced = advanceBotTurns(heroRaise, { maxSteps: 4 });
     expect(preflopAdvanced.street).toBe("flop");
     expect(preflopAdvanced.betting.currentActorSeatIndex).toBe(0);
     const preflopActionCount = preflopAdvanced.actionHistory.filter((record) => record.playerId !== null).length;

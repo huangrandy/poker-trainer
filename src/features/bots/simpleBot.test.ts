@@ -149,12 +149,27 @@ describe("simple bot", () => {
 
   it("auto-advances bot turns until the hero is next", () => {
     const started = startHand(createSampleGameState(), { random: () => 0 });
-    const afterHeroCall = applyAction(started, {
-      type: "call",
+    const pressured = {
+      ...started,
+      players: started.players.map((player) => {
+        if (player.id === "bot-1") {
+          return {
+            ...player,
+            holeCards: [makeCard("T", "spades"), makeCard("T", "hearts")],
+          };
+        }
+
+        return player;
+      }),
+    };
+
+    const afterHeroRaise = applyAction(pressured, {
+      type: "raise",
       playerId: "hero",
+      amount: 20,
     });
 
-    const advanced = advanceBotTurns(afterHeroCall);
+    const advanced = advanceBotTurns(afterHeroRaise);
 
     expect(advanced.street).toBe("flop");
     expect(advanced.betting.currentActorSeatIndex).toBe(0);
