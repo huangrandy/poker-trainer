@@ -885,9 +885,11 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Start new hand" })).toBeInTheDocument();
     expect(container.querySelector('[data-player-id="bot-2"]')).not.toBeNull();
 
+    fireEvent.mouseEnter(container.querySelector('[data-player-id="bot-2"]') as Element);
     fireEvent.click(screen.getByRole("button", { name: "Remove Bot 2 from Seat 2" }));
 
     expect(container.querySelector('[data-player-id="bot-2"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Unqueue removal from Seat 2" })).toHaveTextContent("Leaving");
     expect(screen.getByRole("button", { name: "Start new hand" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start new hand" }));
@@ -895,6 +897,17 @@ describe("App", () => {
     await waitFor(() => {
       expect(container.querySelector('[data-player-id="bot-2"]')).toBeNull();
     });
+  });
+
+  it("does not show a remove button for the hero seat", () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createBlindRevealState(realStartHand));
+
+    const { container } = render(<App />);
+    const heroSeat = container.querySelector('[data-player-id="hero"]');
+
+    expect(heroSeat).not.toBeNull();
+    expect(within(heroSeat as HTMLElement).queryByRole("button", { name: /Remove Hero/ })).toBeNull();
   });
 
   it("flips all villain hole cards face up on showdown", () => {

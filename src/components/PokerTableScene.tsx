@@ -262,6 +262,7 @@ export function PokerTableScene({
     const potRef = useRef<HTMLDivElement>(null);
     const scale = useMeasuredScale(containerRef);
     const [measuredPotHeight, setMeasuredPotHeight] = useState(0);
+    const [hoveredSeatIndex, setHoveredSeatIndex] = useState<number | null>(null);
     const [hoveredQueuedSeatIndex, setHoveredQueuedSeatIndex] = useState<number | null>(null);
     const boardWidth = DESIGN.width * scale;
     const boardHeight = DESIGN.height * scale;
@@ -481,6 +482,16 @@ export function PokerTableScene({
                             key={seat.id}
                             className="poker-table-scene__seat"
                             data-player-id={player?.id ?? undefined}
+                            onMouseEnter={() => {
+                                if (player) {
+                                    setHoveredSeatIndex(player.seatIndex);
+                                }
+                            }}
+                            onMouseLeave={() => {
+                                if (player && hoveredSeatIndex === player.seatIndex) {
+                                    setHoveredSeatIndex(null);
+                                }
+                            }}
                             style={{
                                 position: "absolute",
                                 left: seat.left,
@@ -659,34 +670,25 @@ export function PokerTableScene({
                                         {player ? `$${player.stack}` : "Empty"}
                                     </div>
                                 </div>
-                                {seatIndex !== null ? (
+                                {seatIndex !== null && player && !player.isHero && (pendingSeatChange === "remove" || hoveredSeatIndex === seatIndex) ? (
                                     <button
                                         className="poker-table-scene__seat-add-button"
                                         type="button"
                                         aria-label={
-                                            pendingSeatChange === "add"
-                                                ? `Unqueue bot from ${seat.label}`
-                                                : pendingSeatChange === "remove"
-                                                    ? `Unqueue removal from ${seat.label}`
-                                                    : player
-                                                        ? `Remove ${player.name} from ${seat.label}`
-                                                        : getSeatAddLabel(seat.label)
+                                            pendingSeatChange === "remove"
+                                                ? `Unqueue removal from ${seat.label}`
+                                                : `Remove ${player.name} from ${seat.label}`
                                         }
                                         onClick={() => {
-                                            if (pendingSeatChange === "add" || pendingSeatChange === "remove") {
+                                            if (pendingSeatChange === "remove") {
                                                 onClearPendingSeatChange(seatIndex);
                                                 return;
                                             }
 
-                                            if (player) {
-                                                onRemoveSeat(seatIndex);
-                                                return;
-                                            }
-
-                                            onAddSeat(seatIndex);
+                                            onRemoveSeat(seatIndex);
                                         }}
                                         onMouseEnter={() => {
-                                            if (pendingSeatChange === "add" || pendingSeatChange === "remove") {
+                                            if (pendingSeatChange === "remove") {
                                                 setHoveredQueuedSeatIndex(seatIndex);
                                             }
                                         }}
@@ -704,19 +706,59 @@ export function PokerTableScene({
                                             fontSize: `${12 * scale}px`,
                                             padding: `${7 * scale}px ${12 * scale}px`,
                                             borderRadius: 9999,
-                                            opacity:
-                                                pendingSeatChange === "add" || pendingSeatChange === "remove"
-                                                    ? 0.88
-                                                    : 1,
+                                            opacity: pendingSeatChange === "remove" ? 0.88 : 1,
                                         }}
                                     >
-                                        {pendingSeatChange === "add" || pendingSeatChange === "remove"
+                                        {pendingSeatChange === "remove"
+                                            ? hoveredQueuedSeatIndex === seatIndex
+                                                ? "Unqueue"
+                                                : "Leaving"
+                                            : "Remove"}
+                                    </button>
+                                ) : null}
+                                {!player && seatIndex !== null ? (
+                                    <button
+                                        className="poker-table-scene__seat-add-button"
+                                        type="button"
+                                        aria-label={
+                                            pendingSeatChange === "add"
+                                                ? `Unqueue bot from ${seat.label}`
+                                                : getSeatAddLabel(seat.label)
+                                        }
+                                        onClick={() => {
+                                            if (pendingSeatChange === "add") {
+                                                onClearPendingSeatChange(seatIndex);
+                                                return;
+                                            }
+
+                                            onAddSeat(seatIndex);
+                                        }}
+                                        onMouseEnter={() => {
+                                            if (pendingSeatChange === "add") {
+                                                setHoveredQueuedSeatIndex(seatIndex);
+                                            }
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (hoveredQueuedSeatIndex === seatIndex) {
+                                                setHoveredQueuedSeatIndex(null);
+                                            }
+                                        }}
+                                        style={{
+                                            marginLeft: "auto",
+                                            marginRight: 0,
+                                            marginTop: 0,
+                                            marginBottom: 0,
+                                            alignSelf: "center",
+                                            fontSize: `${12 * scale}px`,
+                                            padding: `${7 * scale}px ${12 * scale}px`,
+                                            borderRadius: 9999,
+                                        }}
+                                    >
+                                        {pendingSeatChange === "add"
                                             ? hoveredQueuedSeatIndex === seatIndex
                                                 ? "Unqueue"
                                                 : "Queued"
-                                            : player
-                                                ? "Remove"
-                                                : "Add"}
+                                            : "Add"}
                                     </button>
                                 ) : null}
                                 {showRevealResult && revealResult ? (

@@ -1521,6 +1521,12 @@ export default function App() {
     }
 
     function handleRemoveSeat(seatIndex: SeatIndex) {
+        const playerAtSeat = gameState.players.find((player) => player.seatIndex === seatIndex);
+
+        if (playerAtSeat?.isHero) {
+            return;
+        }
+
         setPendingSeatChanges((previous) => ({
             ...previous,
             [seatIndex]: "remove",

@@ -891,6 +891,7 @@ textarea {
     gap: 12px;
     min-height: 0;
     align-content: start;
+    overflow: auto;
 }
 
 .coach-panel__messages-spacer {
