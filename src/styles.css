@@ -221,6 +221,8 @@ textarea {
     box-shadow: 0 14px 24px rgba(15, 23, 42, 0.28);
     perspective: 1000px;
     overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .table-card__inner {
