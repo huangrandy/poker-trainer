@@ -29,10 +29,10 @@ type FlickTuning = {
 };
 
 const defaultFlickTuning: FlickTuning = {
-    force: 0.75,
-    snapBack: 260,
-    damping: 18,
-    cornerBias: 1,
+    force: 1.05,
+    snapBack: 320,
+    damping: 16,
+    cornerBias: 1.15,
 };
 
 function getSuitSymbol(suit: string) {
@@ -126,12 +126,12 @@ export function TableCard({
         const yRatio = currentY / rect.height - 0.5;
         const cornerWeight = 0.85 + defaultFlickTuning.cornerBias * 0.55;
         const pushRotateX = Math.max(
-            -14,
-            Math.min(14, -yRatio * 20 * defaultFlickTuning.force * cornerWeight)
+            -18,
+            Math.min(18, -yRatio * 28 * defaultFlickTuning.force * cornerWeight)
         );
         const pushRotateY = Math.max(
-            -14,
-            Math.min(14, xRatio * 20 * defaultFlickTuning.force * cornerWeight)
+            -18,
+            Math.min(18, xRatio * 28 * defaultFlickTuning.force * cornerWeight)
         );
 
         await flickControls.start({
