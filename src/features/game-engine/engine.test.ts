@@ -144,6 +144,64 @@ describe("engine basics", () => {
     ).toThrow();
   });
 
+  it("does not expose a raise when the stack cannot reach the minimum raise", () => {
+    const shortStackState: GameState = {
+      ...createSampleGameState(),
+      handNumber: 2,
+      street: "flop",
+      dealerSeatIndex: 0,
+      buttonSeatIndex: 0,
+      board: [
+        makeCard("9", "diamonds"),
+        makeCard("8", "clubs"),
+        makeCard("A", "hearts"),
+      ],
+      deck: createStandardDeck(),
+      players: createSampleGameState().players.map((player) => {
+        if (player.id === "hero") {
+          return {
+            ...player,
+            stack: 15,
+            holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+            currentStreetBet: 40,
+            totalCommittedThisHand: 40,
+            status: "active" as const,
+            hasActedThisStreet: false,
+          };
+        }
+
+        return {
+          ...player,
+          stack: 950,
+          holeCards: [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+          currentStreetBet: 50,
+          totalCommittedThisHand: 50,
+          status: "active" as const,
+          hasActedThisStreet: true,
+        };
+      }),
+      betting: {
+        currentBet: 50,
+        minRaiseTo: 70,
+        lastAggressorSeatIndex: 1,
+        currentActorSeatIndex: 0,
+      },
+      pot: {
+        mainPot: 100,
+        sidePots: [],
+      },
+      actionHistory: [],
+      lastHandResult: null,
+    };
+
+    const actions = getLegalActions(shortStackState, "hero");
+
+    expect(actions.some((action) => action.type === "fold")).toBe(true);
+    expect(actions.some((action) => action.type === "call")).toBe(true);
+    expect(actions.some((action) => action.type === "raise")).toBe(false);
+    expect(actions.some((action) => action.type === "all_in")).toBe(true);
+  });
+
   it("progresses through turn, river, showdown, and hand completion", () => {
     const started = startHand(createSampleGameState(), { random: () => 0 });
     const afterPreflop = applyAction(

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CoachPanel } from "./components/CoachPanel";
 import { PokerTableScene } from "./components/PokerTableScene";
 import { DebugPanel } from "./components/DebugPanel";
@@ -60,10 +60,34 @@ type SeatRoleBadge = {
     tone: "dealer" | "smallBlind" | "bigBlind";
 };
 type RaisePresetKey = "min" | "half_pot" | "three_quarter_pot" | "pot" | "max";
-type RaiseLegalAction = LegalAction & {
-    type: "raise";
+type AggressiveTrayAction = LegalAction & {
+    type: "bet" | "raise";
     minAmount: number;
     maxAmount: number;
+};
+type AllInAction = LegalAction & {
+    type: "all_in";
+    minAmount: number;
+    maxAmount: number;
+};
+type AggressiveSlotAction = AggressiveTrayAction | AllInAction;
+type AggressiveDraft = {
+    action: AggressiveTrayAction;
+    amount: number;
+};
+type ActionButtonProps = {
+    label: string;
+    disabled?: boolean;
+    onClick: () => void;
+    className?: string;
+};
+type AggressiveSlotProps = {
+    gameState: GameState;
+    action: AggressiveSlotAction | null;
+    draft: AggressiveDraft | null;
+    onDraftChange: (nextDraft: AggressiveDraft) => void;
+    onConfirm: (draft: AggressiveDraft) => void;
+    onAllIn: (() => void) | null;
 };
 
 const BLIND_REVEAL_DELAY_MS = 500;
@@ -282,22 +306,18 @@ function getSeatPosition(index: number, total: number): string {
 
 function getLegalActionLabel(action: LegalAction): string {
     if (action.type === "call" && action.callAmount !== undefined) {
-        return `Call $${action.callAmount}`;
+        return `CALL $${action.callAmount}`;
     }
 
     if ((action.type === "bet" || action.type === "raise") && action.minAmount !== undefined) {
-        return `${action.type === "bet" ? "Bet" : "Raise"} $${action.minAmount}`;
+        return `${action.type === "bet" ? "BET" : "RAISE"} $${action.minAmount}`;
     }
 
     if (action.type === "all_in" && action.maxAmount !== undefined) {
-        return `All in $${action.maxAmount}`;
+        return `ALL IN $${action.maxAmount}`;
     }
 
-    return action.type[0].toUpperCase() + action.type.slice(1);
-}
-
-function isRaiseLegalAction(action: LegalAction): action is RaiseLegalAction {
-    return action.type === "raise" && typeof action.minAmount === "number" && typeof action.maxAmount === "number";
+    return action.type.toUpperCase();
 }
 
 function clampAmount(amount: number, minAmount: number, maxAmount: number): number {
@@ -307,7 +327,7 @@ function clampAmount(amount: number, minAmount: number, maxAmount: number): numb
 function getRaisePresetAmount(
     preset: RaisePresetKey,
     state: GameState,
-    action: RaiseLegalAction
+    action: AggressiveTrayAction
 ): number {
     const minAmount = action.minAmount ?? 0;
     const maxAmount = action.maxAmount ?? minAmount;
@@ -333,14 +353,31 @@ function getRaisePresetLabel(preset: RaisePresetKey): string {
         case "min":
             return "MIN";
         case "half_pot":
-            return "1/2 POT";
+            return "1/2";
         case "three_quarter_pot":
-            return "3/4 POT";
+            return "3/4";
         case "pot":
             return "POT";
         case "max":
             return "MAX";
     }
+}
+
+function isBetOrRaiseAction(action: LegalAction): action is AggressiveTrayAction {
+    return action.type === "bet" || action.type === "raise";
+}
+
+function getPrimaryAggressiveAction(legalActions: LegalAction[]): AggressiveSlotAction | null {
+    return (
+        legalActions.find((action): action is AggressiveTrayAction => action.type === "raise") ??
+        legalActions.find((action): action is AggressiveTrayAction => action.type === "bet") ??
+        legalActions.find((action): action is AllInAction => action.type === "all_in") ??
+        null
+    );
+}
+
+function getAggressiveSlotFallbackLabel(state: GameState): string {
+    return state.betting.currentBet === 0 ? "BET" : "RAISE";
 }
 
 function getRunoutRevealTargets(previousStreet: GameState["street"]): number[] {
@@ -709,36 +746,112 @@ function describeAction(record: GameState["actionHistory"][number], state: GameS
     return `${actor} ${record.type}`;
 }
 
-function ActionButton({
-    action,
-    playerId,
-    onAction,
-    onOpenRaise,
-}: {
-    action: LegalAction;
-    playerId: string;
-    onAction: (action: PlayerAction) => void;
-    onOpenRaise: (action: RaiseLegalAction) => void;
-}) {
+function ActionButton({ label, disabled = false, onClick, className }: ActionButtonProps) {
     return (
         <button
-            className="action-button"
+            className={["action-button action-button--slot", disabled ? "action-button--disabled" : "", className ?? ""]
+                .filter(Boolean)
+                .join(" ")}
             type="button"
-            onClick={() => {
-                if (isRaiseLegalAction(action)) {
-                    onOpenRaise(action);
-                    return;
-                }
-
-                onAction({
-                    type: action.type,
-                    playerId,
-                    amount: action.minAmount ?? action.callAmount ?? action.maxAmount,
-                });
-            }}
+            disabled={disabled}
+            onClick={onClick}
         >
-            {getLegalActionLabel(action)}
+            {label}
         </button>
+    );
+}
+
+function AggressiveActionSlot({
+    gameState,
+    action,
+    draft,
+    onDraftChange,
+    onConfirm,
+    onAllIn,
+}: AggressiveSlotProps) {
+    if (action && isBetOrRaiseAction(action)) {
+        const activeDraft =
+            draft && draft.action.type === action.type
+                ? draft
+                : {
+                      action,
+                      amount: action.minAmount ?? action.maxAmount ?? 0,
+                  };
+        const amount = activeDraft.amount;
+        const amountInputWidth = `${Math.max(6, String(amount).length + 2)}ch`;
+
+        return (
+            <div className="raise-tray" aria-label={`${action.type === "bet" ? "Bet" : "Raise"} controls`}>
+                <div
+                    className="raise-tray__strip"
+                    role="group"
+                    aria-label={`${action.type === "bet" ? "Bet" : "Raise"} sizing presets and controls`}
+                >
+                    {(["min", "half_pot", "three_quarter_pot", "pot", "max"] as RaisePresetKey[]).map((preset) => {
+                        const amountForPreset = getRaisePresetAmount(preset, gameState, action);
+                        const isActive = amountForPreset === amount;
+
+                        return (
+                            <button
+                                key={preset}
+                                type="button"
+                                className={["raise-tray__preset", isActive ? "is-active" : ""].filter(Boolean).join(" ")}
+                                onClick={() => onDraftChange({ action, amount: amountForPreset })}
+                            >
+                                <span>{getRaisePresetLabel(preset)}</span>
+                            </button>
+                        );
+                    })}
+                    <input
+                        aria-label={`${action.type === "bet" ? "Bet" : "Raise"} amount`}
+                        className="raise-tray__amount-input"
+                        style={{ width: amountInputWidth }}
+                        inputMode="numeric"
+                        type="number"
+                        min={action.minAmount ?? 0}
+                        max={action.maxAmount ?? action.minAmount ?? 0}
+                        step={1}
+                        value={`${amount}`}
+                        onChange={(event) =>
+                            onDraftChange({
+                                action,
+                                amount: clampAmount(
+                                    Number(event.target.value),
+                                    action.minAmount ?? 0,
+                                    action.maxAmount ?? action.minAmount ?? 0
+                                ),
+                            })
+                        }
+                    />
+
+                    <div className="raise-tray__actions">
+                        <button className="raise-tray__primary-button" type="button" onClick={() => onConfirm(activeDraft)}>
+                            {action.type === "bet" ? "BET" : "RAISE"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (action?.type === "all_in") {
+        return (
+            <ActionButton
+                label={getLegalActionLabel(action)}
+                disabled={!onAllIn}
+                onClick={onAllIn ?? (() => {})}
+                className="action-button--slot action-button--slot-wide"
+            />
+        );
+    }
+
+    return (
+        <ActionButton
+            label={getAggressiveSlotFallbackLabel(gameState)}
+            disabled
+            onClick={() => {}}
+            className="action-button--slot action-button--slot-wide"
+        />
     );
 }
 
@@ -756,7 +869,7 @@ export default function App() {
             ? new Map(buildBlindRevealActions(persistedGameState).map((entry) => [entry.playerId, entry.label]))
             : new Map()
     );
-    const [raiseDraft, setRaiseDraft] = useState<{ action: RaiseLegalAction; amount: number } | null>(null);
+    const [aggressiveDraft, setAggressiveDraft] = useState<AggressiveDraft | null>(null);
     const [debugRevealAllCards, setDebugRevealAllCards] = useState(
         () => persistedDebugSettings?.revealAllCards ?? false
     );
@@ -802,10 +915,12 @@ export default function App() {
 
         return getLegalActions(gameState, currentActor.id);
     }, [gameState, currentActor]);
-    const raiseAction = useMemo(
-        () => legalActions.find(isRaiseLegalAction) ?? null,
+    const foldAction = useMemo(() => legalActions.find((action) => action.type === "fold") ?? null, [legalActions]);
+    const responseAction = useMemo(
+        () => legalActions.find((action) => action.type === "check" || action.type === "call") ?? null,
         [legalActions]
     );
+    const aggressiveAction = useMemo(() => getPrimaryAggressiveAction(legalActions), [legalActions]);
 
     const handResult = gameState.lastHandResult;
     const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
@@ -852,10 +967,16 @@ export default function App() {
     }, [handResult]);
 
     useEffect(() => {
-        if (!raiseAction) {
-            setRaiseDraft(null);
+        if (!aggressiveAction || !isBetOrRaiseAction(aggressiveAction)) {
+            setAggressiveDraft(null);
+            return;
         }
-    }, [raiseAction]);
+
+        setAggressiveDraft({
+            action: aggressiveAction,
+            amount: aggressiveAction.minAmount ?? aggressiveAction.maxAmount ?? 0,
+        });
+    }, [currentActor?.id, aggressiveAction, gameState.handNumber, gameState.street]);
 
     useEffect(() => {
         if (gameState.street !== "preflop") {
@@ -1155,58 +1276,30 @@ export default function App() {
         });
     }
 
-    function handleOpenRaise(action: RaiseLegalAction) {
-        if (tableLocked) {
+    function handleConfirmAggressiveAction(draft: AggressiveDraft) {
+        if (!currentActor) {
             return;
         }
 
-        setRaiseDraft({
-            action,
-            amount: action.minAmount ?? 0,
+        const isAllIn = draft.amount === draft.action.maxAmount;
+
+        handleAction({
+            type: isAllIn ? "all_in" : draft.action.type,
+            playerId: currentActor.id,
+            amount: isAllIn ? undefined : draft.amount,
         });
+        setAggressiveDraft(null);
     }
 
-    function handleRaisePresetClick(preset: RaisePresetKey) {
-        if (!raiseDraft) {
-            return;
-        }
-
-        setRaiseDraft({
-            action: raiseDraft.action,
-            amount: getRaisePresetAmount(preset, gameState, raiseDraft.action),
-        });
-    }
-
-    function handleRaiseAmountChange(event: ChangeEvent<HTMLInputElement>) {
-        if (!raiseDraft) {
-            return;
-        }
-
-        setRaiseDraft({
-            action: raiseDraft.action,
-            amount: clampAmount(
-                Number(event.target.value),
-                raiseDraft.action.minAmount ?? 0,
-                raiseDraft.action.maxAmount ?? raiseDraft.action.minAmount ?? 0
-            ),
-        });
-    }
-
-    function handleConfirmRaise() {
-        if (!currentActor || !raiseDraft) {
+    function handleAllInAction() {
+        if (!currentActor) {
             return;
         }
 
         handleAction({
-            type: "raise",
+            type: "all_in",
             playerId: currentActor.id,
-            amount: raiseDraft.amount,
         });
-        setRaiseDraft(null);
-    }
-
-    function handleCancelRaise() {
-        setRaiseDraft(null);
     }
 
     function handlePlayerPersonaChange(playerId: string, botPersonaId: BotPersonaId) {
@@ -1252,7 +1345,7 @@ export default function App() {
         lastHandledStartHandIdRef.current = null;
         lastStreetRef.current = "not_started";
         lastBoardLengthRef.current = 0;
-        setRaiseDraft(null);
+        setAggressiveDraft(null);
         setTableActionLabels(new Map());
         setBlindActionLabels(new Map());
         setTableLocked(true);
@@ -1339,71 +1432,53 @@ export default function App() {
                     </div>
 
                     <section className="table-actions" aria-label="Legal actions">
-                        {raiseDraft && currentActor ? (
-                            <div className="raise-tray" aria-label="Raise controls">
-                                <div className="raise-tray__presets" role="group" aria-label="Raise sizing presets">
-                                    {(["min", "half_pot", "three_quarter_pot", "pot", "max"] as RaisePresetKey[]).map((preset) => {
-                                        const amount = getRaisePresetAmount(preset, gameState, raiseDraft.action);
-                                        const isActive = amount === raiseDraft.amount;
-
-                                        return (
-                                            <button
-                                                key={preset}
-                                                type="button"
-                                                className={[
-                                                    "raise-tray__preset",
-                                                    isActive ? "is-active" : "",
-                                                ]
-                                                    .filter(Boolean)
-                                                    .join(" ")}
-                                                onClick={() => handleRaisePresetClick(preset)}
-                                            >
-                                                <span>{getRaisePresetLabel(preset)}</span>
-                                                <strong>${amount}</strong>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="raise-tray__body">
-                                    <div className="raise-tray__amount">
-                                        <span>Raise to</span>
-                                        <strong>${raiseDraft.amount}</strong>
-                                    </div>
-
-                                    <input
-                                        aria-label="Raise amount"
-                                        className="raise-tray__slider"
-                                        type="range"
-                                        min={raiseDraft.action.minAmount ?? 0}
-                                        max={raiseDraft.action.maxAmount ?? raiseDraft.action.minAmount ?? 0}
-                                        step={1}
-                                        value={raiseDraft.amount}
-                                        onChange={handleRaiseAmountChange}
-                                    />
-
-                                    <div className="raise-tray__actions">
-                                        <button className="raise-tray__secondary-button" type="button" onClick={handleCancelRaise}>
-                                            Cancel
-                                        </button>
-                                        <button className="raise-tray__primary-button" type="button" onClick={handleConfirmRaise}>
-                                            Confirm raise
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : null}
-                        <div className="table-actions__row">
-                            {legalActions.length > 0 ? (
-                                legalActions.map((action) => (
+                        <div className="table-actions__bar">
+                            {currentActor ? (
+                                <div className="table-actions__row table-actions__slots">
                                     <ActionButton
-                                        key={action.type}
-                                        action={action}
-                                        playerId={currentActor?.id ?? ""}
-                                        onAction={handleAction}
-                                        onOpenRaise={handleOpenRaise}
+                                        label="FOLD"
+                                        disabled={!foldAction}
+                                        onClick={() => {
+                                            if (!currentActor || !foldAction) {
+                                                return;
+                                            }
+
+                                            handleAction({
+                                                type: foldAction.type,
+                                                playerId: currentActor.id,
+                                            });
+                                        }}
                                     />
-                                ))
+                                    <ActionButton
+                                        label={
+                                            responseAction
+                                                ? getLegalActionLabel(responseAction)
+                                                : gameState.betting.currentBet > 0
+                                                    ? "CALL"
+                                                    : "CHECK"
+                                        }
+                                        disabled={!responseAction}
+                                        onClick={() => {
+                                            if (!currentActor || !responseAction) {
+                                                return;
+                                            }
+
+                                            handleAction({
+                                                type: responseAction.type,
+                                                playerId: currentActor.id,
+                                                amount: responseAction.callAmount,
+                                            });
+                                        }}
+                                    />
+                                    <AggressiveActionSlot
+                                        gameState={gameState}
+                                        action={aggressiveAction}
+                                        draft={aggressiveDraft}
+                                        onDraftChange={(nextDraft) => setAggressiveDraft(nextDraft)}
+                                        onConfirm={handleConfirmAggressiveAction}
+                                        onAllIn={currentActor ? handleAllInAction : null}
+                                    />
+                                </div>
                             ) : (
                                 <p className="table-actions__empty">{emptyActionMessage}</p>
                             )}

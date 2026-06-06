@@ -960,12 +960,14 @@ export function getLegalActions(state: GameState, playerId: string): LegalAction
 
   if (stack > 0) {
     if (state.betting.currentBet === 0) {
-      legalActions.push({
-        type: "bet",
-        minAmount: state.config.blinds.bigBlind,
-        maxAmount: totalAllInAmount,
-      });
-    } else if (totalAllInAmount > state.betting.currentBet) {
+      if (totalAllInAmount >= state.config.blinds.bigBlind) {
+        legalActions.push({
+          type: "bet",
+          minAmount: state.config.blinds.bigBlind,
+          maxAmount: totalAllInAmount,
+        });
+      }
+    } else if (totalAllInAmount >= state.betting.minRaiseTo) {
       legalActions.push({
         type: "raise",
         minAmount: state.betting.minRaiseTo,

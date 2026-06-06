@@ -265,8 +265,59 @@ function createRaiseActionState(): GameState {
         timestampMs: 1,
       },
     ],
-    lastHandResult: null,
+      lastHandResult: null,
     };
+}
+
+function createShortStackFacingBetState(): GameState {
+  return {
+    ...createSampleGameState(),
+    handNumber: 2,
+    street: "flop",
+    dealerSeatIndex: 0,
+    buttonSeatIndex: 0,
+    board: [
+      makeCard("9", "diamonds"),
+      makeCard("8", "clubs"),
+      makeCard("A", "hearts"),
+    ],
+    deck: createSampleGameState().deck,
+    players: createSampleGameState().players.map((player) => {
+      if (player.id === "hero") {
+        return {
+          ...player,
+          stack: 15,
+          holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 40,
+          totalCommittedThisHand: 40,
+          status: "active" as const,
+          hasActedThisStreet: false,
+        };
+      }
+
+      return {
+        ...player,
+        stack: 950,
+        holeCards: [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+        currentStreetBet: 50,
+        totalCommittedThisHand: 50,
+        status: "active" as const,
+        hasActedThisStreet: true,
+      };
+    }),
+    betting: {
+      currentBet: 50,
+      minRaiseTo: 70,
+      lastAggressorSeatIndex: 1,
+      currentActorSeatIndex: 0,
+    },
+    pot: {
+      mainPot: 100,
+      sidePots: [],
+    },
+    actionHistory: [],
+    lastHandResult: null,
+  };
 }
 
 function createPostflopActionChipState(): GameState {
@@ -288,6 +339,57 @@ function createPostflopActionChipState(): GameState {
       ...record,
       street: "flop",
     })),
+  };
+}
+
+function createFlopFirstToActState(): GameState {
+  return {
+    ...createSampleGameState(),
+    handNumber: 2,
+    street: "flop",
+    dealerSeatIndex: 1,
+    buttonSeatIndex: 1,
+    board: [
+      makeCard("9", "diamonds"),
+      makeCard("8", "clubs"),
+      makeCard("A", "hearts"),
+    ],
+    deck: createSampleGameState().deck,
+    players: createSampleGameState().players.map((player) => {
+      if (player.id === "hero") {
+        return {
+          ...player,
+          stack: 2045,
+          holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 0,
+          totalCommittedThisHand: 0,
+          status: "active" as const,
+          hasActedThisStreet: false,
+        };
+      }
+
+      return {
+        ...player,
+        stack: 990,
+        holeCards: [makeCard("Q", "clubs"), makeCard("J", "diamonds")],
+        currentStreetBet: 0,
+        totalCommittedThisHand: 0,
+        status: "active" as const,
+        hasActedThisStreet: false,
+      };
+    }),
+    betting: {
+      currentBet: 0,
+      minRaiseTo: 10,
+      lastAggressorSeatIndex: null,
+      currentActorSeatIndex: 0,
+    },
+    pot: {
+      mainPot: 15,
+      sidePots: [],
+    },
+    actionHistory: [],
+    lastHandResult: null,
   };
 }
 
@@ -505,8 +607,8 @@ describe("App", () => {
     expect(screen.getByText("Street", { exact: true }).parentElement).toHaveTextContent("preflop");
     expect(screen.getByText("$5")).toBeInTheDocument();
     expect(screen.getByText("$10")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Fold" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Call $5" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "FOLD" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "CALL $5" })).toBeEnabled();
   });
 
   it("restores saved debug settings on reload", () => {
@@ -550,6 +652,18 @@ describe("App", () => {
       expect(screen.getByText("Call $10")).toBeInTheDocument();
       expect(screen.getByText("Check")).toBeInTheDocument();
     });
+  });
+
+  it("shows check and bet actions when the hero is first to act on the flop", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createFlopFirstToActState());
+
+    const { container } = render(<App />);
+
+    expect(screen.getByRole("button", { name: "FOLD" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "CHECK" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "BET" })).toBeEnabled();
+    expect(screen.getByLabelText("Bet amount")).toHaveValue(10);
+    expect(container.querySelector(".raise-tray")).not.toBeNull();
   });
 
   it("shows call amounts in the action history", async () => {
@@ -672,8 +786,17 @@ describe("App", () => {
     expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(0);
     expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
 
+    const raiseTray = container.querySelector(".raise-tray");
+    expect(raiseTray).not.toBeNull();
+
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: /All in/i }));
+      fireEvent.click(within(raiseTray as HTMLElement).getByRole("button", { name: /MAX/i }));
+    });
+
+    act(() => {
+      within(raiseTray as HTMLElement).getByRole("button", { name: "RAISE" }).dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
     });
 
     expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(5);
@@ -700,7 +823,7 @@ describe("App", () => {
     const actionStrip = container.querySelector(".table-actions");
 
     expect(actionStrip).not.toBeNull();
-    expect(within(actionStrip as HTMLElement).getByRole("button", { name: "Fold" })).toBeInTheDocument();
+    expect(within(actionStrip as HTMLElement).getByRole("button", { name: "FOLD" })).toBeInTheDocument();
   });
 
   it("sends the current hand snapshot to the coach server and renders the reply", async () => {
@@ -753,25 +876,18 @@ describe("App", () => {
 
     const { container } = render(<App />);
 
-    act(() => {
-      screen.getByRole("button", { name: "Raise $100" }).dispatchEvent(
-        new MouseEvent("click", { bubbles: true })
-      );
-    });
-
     const raiseTray = container.querySelector(".raise-tray");
     expect(raiseTray).not.toBeNull();
-    expect(within(raiseTray as HTMLElement).getByText("Raise to")).toBeInTheDocument();
-    expect(screen.getByLabelText("Raise amount")).toHaveValue("100");
+    expect(screen.getByLabelText("Raise amount")).toHaveValue(100);
 
     act(() => {
-      fireEvent.click(within(raiseTray as HTMLElement).getByRole("button", { name: /3\/4 POT/i }));
+      fireEvent.click(within(raiseTray as HTMLElement).getByRole("button", { name: /3\/4/i }));
     });
 
-    expect(screen.getByLabelText("Raise amount")).toHaveValue("125");
+    expect(screen.getByLabelText("Raise amount")).toHaveValue(125);
 
     act(() => {
-      within(raiseTray as HTMLElement).getByRole("button", { name: "Confirm raise" }).dispatchEvent(
+      within(raiseTray as HTMLElement).getByRole("button", { name: "RAISE" }).dispatchEvent(
         new MouseEvent("click", { bubbles: true })
       );
     });
@@ -780,6 +896,17 @@ describe("App", () => {
       expect(screen.queryByLabelText("Raise controls")).not.toBeInTheDocument();
       expect(screen.getByText(/Hero raised to \$125/)).toBeInTheDocument();
     });
+  });
+
+  it("shows an all-in button instead of a fake raise tray when no full raise is available", () => {
+    vi.spyOn(engine, "startHand").mockImplementation(() => createShortStackFacingBetState());
+
+    const { container } = render(<App />);
+
+    expect(container.querySelector(".raise-tray")).toBeNull();
+    expect(screen.getByRole("button", { name: "FOLD" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "CALL $10" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "ALL IN $55" })).toBeEnabled();
   });
 
   it("renders the six-seat ring without current-actor styling", () => {
