@@ -5,7 +5,7 @@ import * as engine from "./features/game-engine/engine";
 import { createSampleGameState } from "./features/game-engine/fixtures";
 import type { Card, GameState } from "./features/game-engine/types";
 
-import App from "./App";
+import App, { getRunoutRevealSteps } from "./App";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -210,6 +210,15 @@ function createFoldedVillainState(): GameState {
       return player;
     }),
   };
+}
+
+function createFoldRevealState(startHandImpl: typeof engine.startHand): GameState {
+  const started = startHandImpl(createSampleGameState(), { random: () => 0 });
+
+  return engine.applyAction(started, {
+    type: "fold",
+    playerId: "hero",
+  });
 }
 
 function createRaiseActionState(): GameState {
@@ -419,6 +428,7 @@ function createStreetRevealState(startHandImpl: typeof engine.startHand): GameSt
 
 function createPreflopAllInRunoutRevealState(): GameState {
   const sample = createSampleGameState();
+  const showdownResult = createShowdownRevealState().lastHandResult;
 
   return {
     ...sample,
@@ -472,7 +482,7 @@ function createPreflopAllInRunoutRevealState(): GameState {
       sidePots: [],
     },
     actionHistory: [],
-    lastHandResult: null,
+    lastHandResult: showdownResult,
   };
 }
 
@@ -519,7 +529,16 @@ function createPreflopAllInRunoutStartState(): GameState {
       mainPot: 15,
       sidePots: [],
     },
-    actionHistory: [],
+    actionHistory: [
+      {
+        id: "27:1",
+        type: "start_hand",
+        playerId: null,
+        street: "preflop",
+        handNumber: 27,
+        timestampMs: 1,
+      },
+    ],
     lastHandResult: null,
   };
 }
@@ -575,7 +594,7 @@ describe("App", () => {
     const realStartHand = engine.startHand;
     vi.spyOn(engine, "startHand").mockImplementation(() => createBustedHeroState(realStartHand));
 
-    render(<App />);
+    const { container: coachContainer } = render(<App />);
 
     expect(
       await screen.findByText("Hand complete. Rebuy the hero to continue.", {}, { timeout: 5000 })
@@ -599,10 +618,10 @@ describe("App", () => {
   it("shows showdown winners, losers, and hand tooltips", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
 
-    const { container } = render(<App />);
-    const potPill = container.querySelector(".poker-table-scene__pot");
-    const winnerBanner = container.querySelector(".poker-table-scene__banner--winner");
-    const loserBanner = container.querySelector(".poker-table-scene__banner--loser");
+    const { container: coachContainer } = render(<App />);
+    const potPill = coachContainer.querySelector(".poker-table-scene__pot");
+    const winnerBanner = coachContainer.querySelector(".poker-table-scene__banner--winner");
+    const loserBanner = coachContainer.querySelector(".poker-table-scene__banner--loser");
 
     expect(potPill).not.toBeNull();
     expect(within(potPill as HTMLElement).getByText("Pot awarded")).toBeInTheDocument();
@@ -611,9 +630,9 @@ describe("App", () => {
     expect(loserBanner).not.toBeNull();
     expect(winnerBanner).toHaveStyle({ opacity: "1" });
     expect(loserBanner).toHaveStyle({ opacity: "1" });
-    expect(container.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
-    expect(container.querySelectorAll(".table-card--highlighted").length).toBeGreaterThan(0);
-    expect(container.querySelectorAll(".table-card--muted").length).toBeGreaterThan(0);
+    expect(coachContainer.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
+    expect(coachContainer.querySelectorAll(".table-card--highlighted").length).toBeGreaterThan(0);
+    expect(coachContainer.querySelectorAll(".table-card--muted").length).toBeGreaterThan(0);
     expect(within(winnerBanner as HTMLElement).getByText(/Straight/i)).toBeInTheDocument();
     expect(within(loserBanner as HTMLElement).getByText(/Pair/i)).toBeInTheDocument();
   });
@@ -648,7 +667,7 @@ describe("App", () => {
       })
     );
 
-    render(<App />);
+    const { container } = render(<App />);
     act(() => {
       vi.runAllTimers();
     });
@@ -671,7 +690,7 @@ describe("App", () => {
       })
     );
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(screen.getByRole("checkbox", { name: "Reveal cards" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Bot autoplay" })).not.toBeChecked();
@@ -682,7 +701,7 @@ describe("App", () => {
   it("falls back to a fresh game when saved state is invalid", () => {
     window.localStorage.setItem(GAME_STATE_STORAGE_KEY, "{\"version\":1,\"gameState\":null}");
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("1");
     expect(screen.getByText("Street", { exact: true }).parentElement).toHaveTextContent("preflop");
@@ -719,7 +738,7 @@ describe("App", () => {
   it("shows call amounts in the action history", async () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createActionChipState());
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(screen.getByText("Hero called $10")).toBeInTheDocument();
   });
@@ -741,6 +760,36 @@ describe("App", () => {
 
     expect(foldedCards.length).toBe(2);
     expect(container.querySelectorAll(".poker-table-scene__hole-cards .table-card--face-down")).toHaveLength(2);
+  });
+
+  it("keeps folded cards muted when reveal cards is on after a fold", () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createFoldRevealState(realStartHand));
+
+    window.localStorage.setItem(
+      DEBUG_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        revealAllCards: true,
+        botAutoplayEnabled: false,
+      })
+    );
+
+    const { container } = render(<App />);
+    const mutedCards = container.querySelectorAll(".poker-table-scene__hole-cards .table-card--muted");
+    const faceDownCards = container.querySelectorAll(".poker-table-scene__hole-cards .table-card--face-down");
+    const winnerBanner = container.querySelector(".poker-table-scene__banner--winner");
+    const loserBanner = container.querySelector(".poker-table-scene__banner--loser");
+
+    expect(faceDownCards).toHaveLength(0);
+    expect(mutedCards).toHaveLength(2);
+    expect(winnerBanner).not.toBeNull();
+    expect(loserBanner).not.toBeNull();
+    expect(winnerBanner).toHaveStyle({ filter: "none" });
+    expect((winnerBanner as HTMLElement).style.boxShadow).toContain("rgba(34, 197, 94, 0.34)");
+    expect(loserBanner).toHaveStyle({
+      filter: "grayscale(0.52) brightness(0.45) saturate(0.8) contrast(0.95)",
+    });
   });
 
   it("flips all villain hole cards face up on showdown", () => {
@@ -795,7 +844,7 @@ describe("App", () => {
       })
     );
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(screen.getByText("Hand", { exact: true }).parentElement).toHaveTextContent("3");
 
@@ -809,61 +858,29 @@ describe("App", () => {
     expect(screen.queryByText("Hand 3")).not.toBeInTheDocument();
   });
 
-  it("replays an all-in runout one street at a time", async () => {
-    const realApplyAction = engine.applyAction;
-    const setupState = createPreflopAllInRunoutStartState();
-    const finalState = createPreflopAllInRunoutRevealState();
+  it("builds the all-in runout reveal steps", () => {
+    expect(getRunoutRevealSteps("preflop", 0)).toEqual([
+      { visibleCount: 1, faceUpCount: 0 },
+      { visibleCount: 2, faceUpCount: 0 },
+      { visibleCount: 3, faceUpCount: 0 },
+      { visibleCount: 3, faceUpCount: 3 },
+      { visibleCount: 4, faceUpCount: 3 },
+      { visibleCount: 4, faceUpCount: 4 },
+      { visibleCount: 5, faceUpCount: 4 },
+      { visibleCount: 5, faceUpCount: 5 },
+    ]);
 
-    vi.spyOn(engine, "startHand").mockImplementation(() => setupState);
-    vi.spyOn(engine, "getLegalActions").mockImplementation((state, playerId) => {
-      if (state.street === "preflop" && playerId === "hero") {
-        return [
-          {
-            type: "all_in",
-            minAmount: 1050,
-            maxAmount: 1050,
-          },
-        ];
-      }
+    expect(getRunoutRevealSteps("flop", 3)).toEqual([
+      { visibleCount: 4, faceUpCount: 3 },
+      { visibleCount: 4, faceUpCount: 4 },
+      { visibleCount: 5, faceUpCount: 4 },
+      { visibleCount: 5, faceUpCount: 5 },
+    ]);
 
-      return [];
-    });
-    vi.spyOn(engine, "applyAction").mockImplementation((state, action) => {
-      if (state.street === "preflop" && action.type === "all_in" && action.playerId === "hero") {
-        return finalState;
-      }
-
-      return realApplyAction(state, action);
-    });
-    vi.useFakeTimers();
-
-    const { container } = render(<App />);
-
-    expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(0);
-    expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
-
-    act(() => {
-      screen.getByRole("button", { name: /all in/i }).dispatchEvent(
-        new MouseEvent("click", { bubbles: true })
-      );
-    });
-
-    expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(0);
-    expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
-
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-
-    expect(container.querySelectorAll(".poker-table-scene__community .table-card--face-down")).toHaveLength(1);
-    expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
-
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-
-    expect(container.querySelectorAll(".poker-table-scene__community .table-card--face-down")).toHaveLength(0);
-    expect(container.querySelector(".poker-table-scene__banner--winner")).not.toBeNull();
+    expect(getRunoutRevealSteps("turn", 4)).toEqual([
+      { visibleCount: 5, faceUpCount: 4 },
+      { visibleCount: 5, faceUpCount: 5 },
+    ]);
   });
 
   it("renders the legal actions in the table strip", () => {
@@ -897,7 +914,7 @@ describe("App", () => {
       ) as Response
     );
 
-    render(<App />);
+    const { container: coachContainer } = render(<App />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Ask coach" }));

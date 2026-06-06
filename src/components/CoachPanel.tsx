@@ -144,40 +144,6 @@ export function CoachPanel({ gameState }: CoachPanelProps) {
                 <span>{sessionId ? `Thread ${sessionId.slice(0, 12)}` : "New session"}</span>
             </div> */}
 
-            <label className="coach-panel__prompt">
-                <span>Prompt</span>
-                <textarea
-                    value={prompt}
-                    rows={4}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    placeholder="Ask for a line, range note, or exploitative adjustment"
-                />
-            </label>
-
-            <div className="coach-panel__actions">
-                <button
-                    className="coach-panel__icon-button coach-panel__icon-button--ghost"
-                    type="button"
-                    onClick={handleResetCoach}
-                    aria-label="Reset coach"
-                    title="Reset coach"
-                >
-                    <ResetIcon />
-                </button>
-                <button
-                    className="coach-panel__icon-button coach-panel__icon-button--primary"
-                    type="button"
-                    onClick={handleAskCoach}
-                    disabled={isSending}
-                    aria-label={isSending ? "Asking coach" : "Ask coach"}
-                    title={isSending ? "Asking coach" : "Ask coach"}
-                >
-                    {isSending ? <span className="coach-panel__spinner" aria-hidden="true" /> : <SendIcon />}
-                </button>
-            </div>
-
-            {error ? <p className="coach-panel__error">{error}</p> : null}
-
             <div className="coach-panel__messages" aria-live="polite">
                 {messages.length > 0 ? (
                     messages.map((message) => (
@@ -199,6 +165,42 @@ export function CoachPanel({ gameState }: CoachPanelProps) {
                         </article>
                     ))
                 ) : ""}
+            </div>
+
+            <div className="coach-panel__composer">
+                <label className="coach-panel__prompt">
+                    <span>Prompt</span>
+                    <textarea
+                        value={prompt}
+                        rows={4}
+                        onChange={(event) => setPrompt(event.target.value)}
+                        placeholder="Ask for a line, range note, or exploitative adjustment"
+                    />
+                </label>
+
+                <div className="coach-panel__actions">
+                    <button
+                        className="coach-panel__icon-button coach-panel__icon-button--ghost"
+                        type="button"
+                        onClick={handleResetCoach}
+                        aria-label="Reset coach"
+                        title="Reset coach"
+                    >
+                        <ResetIcon />
+                    </button>
+                    <button
+                        className="coach-panel__icon-button coach-panel__icon-button--primary"
+                        type="button"
+                        onClick={handleAskCoach}
+                        disabled={isSending}
+                        aria-label={isSending ? "Asking coach" : "Ask coach"}
+                        title={isSending ? "Asking coach" : "Ask coach"}
+                    >
+                        {isSending ? <span className="coach-panel__spinner" aria-hidden="true" /> : <SendIcon />}
+                    </button>
+                </div>
+
+                {error ? <p className="coach-panel__error">{error}</p> : null}
             </div>
         </article>
     );
