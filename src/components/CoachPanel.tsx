@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { getLegalActions } from "../features/game-engine/engine";
 import type { GameState } from "../features/game-engine/types";
 
@@ -66,6 +66,114 @@ function ResetIcon() {
             />
         </svg>
     );
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    const pattern = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+    let lastIndex = 0;
+
+    for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+        if (match.index > lastIndex) {
+            nodes.push(text.slice(lastIndex, match.index));
+        }
+
+        const token = match[0];
+
+        if (token.startsWith("**")) {
+            nodes.push(
+                <strong key={`${match.index}-bold`}>
+                    {token.slice(2, -2)}
+                </strong>
+            );
+        } else {
+            nodes.push(
+                <code key={`${match.index}-code`} className="coach-panel__inline-code">
+                    {token.slice(1, -1)}
+                </code>
+            );
+        }
+
+        lastIndex = match.index + token.length;
+    }
+
+    if (lastIndex < text.length) {
+        nodes.push(text.slice(lastIndex));
+    }
+
+    return nodes;
+}
+
+function renderMarkdownMessage(text: string): ReactNode {
+    const lines = text.replace(/\r\n/g, "\n").split("\n");
+    const blocks: ReactNode[] = [];
+    let paragraphLines: string[] = [];
+    let listItems: string[] = [];
+
+    function flushParagraph() {
+        if (paragraphLines.length === 0) {
+            return;
+        }
+
+        blocks.push(
+            <p key={`coach-paragraph-${blocks.length}`} className="coach-panel__markdown-paragraph">
+                {renderInlineMarkdown(paragraphLines.join(" "))}
+            </p>
+        );
+        paragraphLines = [];
+    }
+
+    function flushList() {
+        if (listItems.length === 0) {
+            return;
+        }
+
+        blocks.push(
+            <ul key={`coach-list-${blocks.length}`} className="coach-panel__markdown-list">
+                {listItems.map((item, index) => (
+                    <li key={`coach-list-item-${blocks.length}-${index}`}>
+                        {renderInlineMarkdown(item)}
+                    </li>
+                ))}
+            </ul>
+        );
+        listItems = [];
+    }
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+
+        if (!line) {
+            flushParagraph();
+            flushList();
+            continue;
+        }
+
+        if (/^[-*]\s+/.test(line)) {
+            flushParagraph();
+            listItems.push(line.replace(/^[-*]\s+/, ""));
+            continue;
+        }
+
+        if (/^[A-Za-z][A-Za-z0-9\s-]*:$/.test(line)) {
+            flushParagraph();
+            flushList();
+            blocks.push(
+                <p key={`coach-heading-${blocks.length}`} className="coach-panel__markdown-heading">
+                    <strong>{renderInlineMarkdown(line)}</strong>
+                </p>
+            );
+            continue;
+        }
+
+        flushList();
+        paragraphLines.push(line);
+    }
+
+    flushParagraph();
+    flushList();
+
+    return <>{blocks}</>;
 }
 
 export function CoachPanel({ gameState }: CoachPanelProps) {
@@ -157,7 +265,11 @@ export function CoachPanel({ gameState }: CoachPanelProps) {
                                     <span>{message.confidence} confidence</span>
                                 ) : null}
                             </div>
-                            <p>{message.text}</p>
+                            {message.role === "assistant" ? (
+                                <div className="coach-panel__message-body">{renderMarkdownMessage(message.text)}</div>
+                            ) : (
+                                <p className="coach-panel__message-text">{message.text}</p>
+                            )}
                             {message.summary ? <small>{message.summary}</small> : null}
                             {message.recommendedAction ? (
                                 <small>Recommended action: {message.recommendedAction}</small>

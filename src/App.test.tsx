@@ -594,7 +594,7 @@ describe("App", () => {
     const realStartHand = engine.startHand;
     vi.spyOn(engine, "startHand").mockImplementation(() => createBustedHeroState(realStartHand));
 
-    const { container: coachContainer } = render(<App />);
+    const { container } = render(<App />);
 
     expect(
       await screen.findByText("Hand complete. Rebuy the hero to continue.", {}, { timeout: 5000 })
@@ -618,10 +618,10 @@ describe("App", () => {
   it("shows showdown winners, losers, and hand tooltips", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
 
-    const { container: coachContainer } = render(<App />);
-    const potPill = coachContainer.querySelector(".poker-table-scene__pot");
-    const winnerBanner = coachContainer.querySelector(".poker-table-scene__banner--winner");
-    const loserBanner = coachContainer.querySelector(".poker-table-scene__banner--loser");
+    const { container } = render(<App />);
+    const potPill = container.querySelector(".poker-table-scene__pot");
+    const winnerBanner = container.querySelector(".poker-table-scene__banner--winner");
+    const loserBanner = container.querySelector(".poker-table-scene__banner--loser");
 
     expect(potPill).not.toBeNull();
     expect(within(potPill as HTMLElement).getByText("Pot awarded")).toBeInTheDocument();
@@ -630,9 +630,9 @@ describe("App", () => {
     expect(loserBanner).not.toBeNull();
     expect(winnerBanner).toHaveStyle({ opacity: "1" });
     expect(loserBanner).toHaveStyle({ opacity: "1" });
-    expect(coachContainer.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
-    expect(coachContainer.querySelectorAll(".table-card--highlighted").length).toBeGreaterThan(0);
-    expect(coachContainer.querySelectorAll(".table-card--muted").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
+    expect(container.querySelectorAll(".table-card--highlighted").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".table-card--muted").length).toBeGreaterThan(0);
     expect(within(winnerBanner as HTMLElement).getByText(/Straight/i)).toBeInTheDocument();
     expect(within(loserBanner as HTMLElement).getByText(/Pair/i)).toBeInTheDocument();
   });
@@ -900,7 +900,7 @@ describe("App", () => {
         JSON.stringify({
           ok: true,
           sessionId: "thread-abc123",
-          text: "Three-bet AKs for value.",
+          text: "Assume you are heads-up and you are the flop aggressor, facing no bet. With `J♣7♣` on `2♠ 9♣ 3♣`, you have a flush draw plus two overcard-ish backdoor pressure, but no made hand.\n\nDefault theory-aligned play: mostly **bet small**, around **25% to 33% pot**.\n\nHow to think about sizing:\n- Use **small sizing** when you want folds from overcards and weak pairs while keeping your range wide.\n- Use **bigger sizing** only if you need to pressure a capped range or your draw has strong backup equity.\n\nPractical rule:\n- Versus a check, I’d usually start with **$10**.\n- If stacks are very deep and villain overfolds, you can go a bit larger, but there is no need to blast it.\n\nIf you want, I can also give you a simple sizing rule for **check-raising flush draws** versus a bet, which is the more common decision with this type of hand.",
           summary: "Value 3-bet.",
           recommendedAction: "raise",
           confidence: "high",
@@ -914,7 +914,7 @@ describe("App", () => {
       ) as Response
     );
 
-    const { container: coachContainer } = render(<App />);
+    const { container } = render(<App />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Ask coach" }));
@@ -933,7 +933,15 @@ describe("App", () => {
     expect(parsedBody.snapshot.handNumber).toBe(1);
     expect(parsedBody.snapshot.heroPlayerId).toBe("hero");
 
-    expect(await screen.findByText("Three-bet AKs for value.")).toBeInTheDocument();
+    const messageBody = container.querySelector(".coach-panel__message-body");
+    expect(messageBody).not.toBeNull();
+    expect(messageBody).toHaveTextContent("J♣7♣");
+    expect(messageBody).toHaveTextContent("bet small");
+    expect(messageBody).toHaveTextContent("How to think about sizing:");
+    expect(messageBody).toHaveTextContent("Use small sizing when you want folds from overcards and weak pairs while keeping your range wide.");
+    expect(messageBody).toHaveTextContent("Use bigger sizing only if you need to pressure a capped range or your draw has strong backup equity.");
+    expect(messageBody).toHaveTextContent("Versus a check, I’d usually start with $10.");
+    expect(messageBody).toHaveTextContent("If you want, I can also give you a simple sizing rule for check-raising flush draws versus a bet, which is the more common decision with this type of hand.");
   });
 
   it("opens a raise tray and confirms a sized raise", async () => {
