@@ -46,6 +46,11 @@ type AggressiveDraft = {
     action: AggressiveTrayAction;
     amount: number;
 };
+type CommunityRevealState = {
+    active: boolean;
+    visibleCount: number;
+    faceUpCount: number;
+};
 type ActionButtonProps = {
     label: string;
     disabled?: boolean;
@@ -351,20 +356,42 @@ function getAggressiveSlotFallbackLabel(state: GameState): string {
     return state.betting.currentBet === 0 ? "BET" : "RAISE";
 }
 
-function getRunoutRevealTargets(previousStreet: GameState["street"]): number[] {
-    if (previousStreet === "preflop") {
-        return [3, 4, 5];
+export function getRunoutRevealSteps(
+    previousStreet: GameState["street"],
+    startingVisibleCount: number
+) {
+    const streetSegments =
+        previousStreet === "preflop"
+            ? [3, 1, 1]
+            : previousStreet === "flop"
+                ? [1, 1]
+                : previousStreet === "turn"
+                    ? [1]
+                    : [];
+    const steps: Array<{
+        visibleCount: number;
+        faceUpCount: number;
+    }> = [];
+    let visibleCount = startingVisibleCount;
+    let faceUpCount = startingVisibleCount;
+
+    for (const segmentCount of streetSegments) {
+        for (let cardIndex = 0; cardIndex < segmentCount; cardIndex += 1) {
+            visibleCount += 1;
+            steps.push({
+                visibleCount,
+                faceUpCount,
+            });
+        }
+
+        faceUpCount = visibleCount;
+        steps.push({
+            visibleCount,
+            faceUpCount,
+        });
     }
 
-    if (previousStreet === "flop") {
-        return [4, 5];
-    }
-
-    if (previousStreet === "turn") {
-        return [5];
-    }
-
-    return [];
+    return steps;
 }
 
 function clearRevealTimers(
@@ -704,15 +731,24 @@ function AggressiveActionSlot({
     onAllIn,
 }: AggressiveSlotProps) {
     if (action && isBetOrRaiseAction(action)) {
+        const step = gameState.config.blinds.bigBlind;
+        const min = action.minAmount ?? 0;
+        const max = action.maxAmount ?? action.minAmount ?? 0;
         const activeDraft =
             draft && draft.action.type === action.type
                 ? draft
                 : {
                       action,
-                      amount: action.minAmount ?? action.maxAmount ?? 0,
+                      amount: min,
                   };
         const amount = activeDraft.amount;
         const amountInputWidth = `${Math.max(6, String(amount).length + 2)}ch`;
+        const setAmount = (nextAmount: number) => {
+            onDraftChange({
+                action,
+                amount: clampAmount(nextAmount, min, max),
+            });
+        };
 
         return (
             <div className="raise-tray" aria-label={`${action.type === "bet" ? "Bet" : "Raise"} controls`}>
@@ -730,7 +766,7 @@ function AggressiveActionSlot({
                                 key={preset}
                                 type="button"
                                 className={["raise-tray__preset", isActive ? "is-active" : ""].filter(Boolean).join(" ")}
-                                onClick={() => onDraftChange({ action, amount: amountForPreset })}
+                                onClick={() => setAmount(amountForPreset)}
                             >
                                 <span>{getRaisePresetLabel(preset)}</span>
                             </button>
@@ -742,21 +778,41 @@ function AggressiveActionSlot({
                         style={{ width: amountInputWidth }}
                         inputMode="numeric"
                         type="number"
-                        min={action.minAmount ?? 0}
-                        max={action.maxAmount ?? action.minAmount ?? 0}
+                        min={min}
+                        max={max}
                         step={1}
                         value={`${amount}`}
-                        onChange={(event) =>
-                            onDraftChange({
-                                action,
-                                amount: clampAmount(
-                                    Number(event.target.value),
-                                    action.minAmount ?? 0,
-                                    action.maxAmount ?? action.minAmount ?? 0
-                                ),
-                            })
-                        }
+                        onChange={(event) => setAmount(Number(event.target.value))}
                     />
+
+                    <div className="raise-tray__adjustments">
+                        <button
+                            className="raise-tray__step-button"
+                            type="button"
+                            aria-label="Decrease amount"
+                            onClick={() => setAmount(amount - step)}
+                        >
+                            -
+                        </button>
+                        <input
+                            aria-label={`${action.type === "bet" ? "Bet" : "Raise"} slider`}
+                            className="raise-tray__amount-slider"
+                            type="range"
+                            min={min}
+                            max={max}
+                            step={step}
+                            value={amount}
+                            onChange={(event) => setAmount(Number(event.target.value))}
+                        />
+                        <button
+                            className="raise-tray__step-button"
+                            type="button"
+                            aria-label="Increase amount"
+                            onClick={() => setAmount(amount + step)}
+                        >
+                            +
+                        </button>
+                    </div>
 
                     <div className="raise-tray__actions">
                         <button className="raise-tray__primary-button" type="button" onClick={() => onConfirm(activeDraft)}>
@@ -811,10 +867,11 @@ export default function App() {
         () => persistedDebugSettings?.botAutoplayEnabled ?? true
     );
     const [tableLocked, setTableLocked] = useState(() => !persistedGameState);
-    const [streetReveal, setStreetReveal] = useState({
+    const [communityReveal, setCommunityReveal] = useState<CommunityRevealState>(() => ({
         active: false,
-        fromIndex: 0,
-    });
+        visibleCount: gameState.board.length,
+        faceUpCount: gameState.board.length,
+    }));
     const botTimerRef = useRef<number | null>(null);
     const blindRevealTimerRef = useRef<number | null>(null);
     const revealTimerRef = useRef<number | null>(null);
@@ -858,8 +915,33 @@ export default function App() {
 
     const handResult = gameState.lastHandResult;
     const isHandComplete = gameState.street === "hand_complete" && handResult !== null;
+    const pendingStreetChange = !communityReveal.active && lastStreetRef.current !== gameState.street;
+    const pendingAllInRunout =
+        pendingStreetChange &&
+        gameState.street === "hand_complete" &&
+        handResult?.kind === "showdown" &&
+        lastBoardLengthRef.current < gameState.board.length;
+    const renderCommunityReveal = communityReveal.active
+        ? communityReveal
+        : pendingAllInRunout
+            ? {
+                  active: true,
+                  visibleCount: lastBoardLengthRef.current,
+                  faceUpCount: lastBoardLengthRef.current,
+              }
+            : pendingStreetChange && gameState.street !== "showdown" && gameState.street !== "hand_complete"
+                ? {
+                      active: true,
+                      visibleCount: gameState.board.length,
+                      faceUpCount: lastBoardLengthRef.current,
+                  }
+                : {
+                      active: false,
+                      visibleCount: gameState.board.length,
+                      faceUpCount: gameState.board.length,
+                  };
     const showVillainHoleCards = gameState.street === "showdown" || handResult?.kind === "showdown";
-    const showHandRevealResult = handResult?.kind === "showdown" && !streetReveal.active;
+    const showHandRevealResult = handResult?.kind === "showdown" && !renderCommunityReveal.active;
     const centerPotLabel = isHandComplete ? "Pot awarded" : "Pot";
     const centerPotAmount = handResult?.potAwarded ?? gameState.pot.mainPot;
     const handResultByPlayerId = useMemo(
@@ -929,12 +1011,12 @@ export default function App() {
     }, [blindActionLabels.size, gameState]);
 
     useEffect(() => {
-        if (persistedGameState !== null && (tableLocked || streetReveal.active)) {
+        if (persistedGameState !== null && (tableLocked || renderCommunityReveal.active)) {
             return;
         }
 
         savePersistedGameState(gameState);
-    }, [gameState, persistedGameState, streetReveal.active, tableLocked]);
+    }, [gameState, persistedGameState, renderCommunityReveal.active, tableLocked]);
 
     useEffect(() => {
         savePersistedDebugSettings({
@@ -1032,7 +1114,11 @@ export default function App() {
             blindRevealTimerRef.current = window.setTimeout(revealNextBlind, BLIND_REVEAL_DELAY_MS);
             lastStreetRef.current = gameState.street;
             lastBoardLengthRef.current = gameState.board.length;
-            setStreetReveal({ active: false, fromIndex: gameState.board.length });
+            setCommunityReveal({
+                active: false,
+                visibleCount: gameState.board.length,
+                faceUpCount: gameState.board.length,
+            });
             return;
         }
 
@@ -1048,7 +1134,11 @@ export default function App() {
 
         if (previousStreet === gameState.street) {
             setTableLocked(false);
-            setStreetReveal({ active: false, fromIndex: gameState.board.length });
+            setCommunityReveal({
+                active: false,
+                visibleCount: gameState.board.length,
+                faceUpCount: gameState.board.length,
+            });
             return;
         }
 
@@ -1058,47 +1148,46 @@ export default function App() {
             previousStreet !== gameState.street &&
             previousBoardLength < gameState.board.length;
 
-        const runoutRevealTargets = getRunoutRevealTargets(previousStreet);
+        const runoutRevealSteps = getRunoutRevealSteps(previousStreet, previousBoardLength);
 
-        if (isAllInRunoutReveal && runoutRevealTargets.length > 0) {
+        if (isAllInRunoutReveal && runoutRevealSteps.length > 0) {
             setBlindActionLabels(new Map());
             streetRevealActiveRef.current = true;
             const previousStreetActions = buildVisibleActionLabelsForStreet(gameState, previousStreet);
 
             setTableActionLabels(previousStreetActions);
             setTableLocked(true);
-            setStreetReveal({
+            setCommunityReveal({
                 active: true,
-                fromIndex: runoutRevealTargets[0],
+                visibleCount: previousBoardLength,
+                faceUpCount: previousBoardLength,
             });
 
-            let nextRevealIndex = 1;
+            let nextRevealIndex = 0;
 
             const revealNextStreetCard = () => {
-                if (nextRevealIndex < runoutRevealTargets.length) {
-                    setStreetReveal({
-                        active: true,
-                        fromIndex: runoutRevealTargets[nextRevealIndex],
-                    });
-                    nextRevealIndex += 1;
+                const nextStep = runoutRevealSteps[nextRevealIndex];
 
-                    if (nextRevealIndex < runoutRevealTargets.length) {
-                        revealTimerRef.current = window.setTimeout(
-                            revealNextStreetCard,
-                            STREET_REVEAL_DELAY_MS
-                        );
-                        return;
-                    }
+                if (!nextStep) {
+                    streetRevealActiveRef.current = false;
+                    setTableActionLabels(visibleActionByPlayerId);
+                    setTableLocked(false);
+                    setCommunityReveal({
+                        active: false,
+                        visibleCount: gameState.board.length,
+                        faceUpCount: gameState.board.length,
+                    });
+                    revealTimerRef.current = null;
+                    return;
                 }
 
-                streetRevealActiveRef.current = false;
-                setTableActionLabels(visibleActionByPlayerId);
-                setTableLocked(false);
-                setStreetReveal({
-                    active: false,
-                    fromIndex: gameState.board.length,
+                setCommunityReveal({
+                    active: true,
+                    visibleCount: nextStep.visibleCount,
+                    faceUpCount: nextStep.faceUpCount,
                 });
-                revealTimerRef.current = null;
+                nextRevealIndex += 1;
+                revealTimerRef.current = window.setTimeout(revealNextStreetCard, STREET_REVEAL_DELAY_MS);
             };
 
             revealTimerRef.current = window.setTimeout(revealNextStreetCard, STREET_REVEAL_DELAY_MS);
@@ -1111,7 +1200,11 @@ export default function App() {
             setBlindActionLabels(new Map());
             setTableActionLabels(visibleActionByPlayerId);
             setTableLocked(false);
-            setStreetReveal({ active: false, fromIndex: gameState.board.length });
+            setCommunityReveal({
+                active: false,
+                visibleCount: gameState.board.length,
+                faceUpCount: gameState.board.length,
+            });
         } else {
             setBlindActionLabels(new Map());
             streetRevealActiveRef.current = true;
@@ -1119,18 +1212,20 @@ export default function App() {
 
             setTableActionLabels(previousStreetActions);
             setTableLocked(true);
-            setStreetReveal({
+            setCommunityReveal({
                 active: true,
-                fromIndex: previousBoardLength,
+                visibleCount: gameState.board.length,
+                faceUpCount: previousBoardLength,
             });
 
             revealTimerRef.current = window.setTimeout(() => {
                 streetRevealActiveRef.current = false;
                 setTableActionLabels(visibleActionByPlayerId);
                 setTableLocked(false);
-                setStreetReveal({
+                setCommunityReveal({
                     active: false,
-                    fromIndex: gameState.board.length,
+                    visibleCount: gameState.board.length,
+                    faceUpCount: gameState.board.length,
                 });
                 revealTimerRef.current = null;
             }, STREET_REVEAL_DELAY_MS);
@@ -1147,7 +1242,7 @@ export default function App() {
         if (
             !botAutoplayEnabled ||
             tableLocked ||
-            streetReveal.active ||
+            renderCommunityReveal.active ||
             currentActor === null ||
             !currentActor.isBot
         ) {
@@ -1165,7 +1260,7 @@ export default function App() {
                 botTimerRef.current = null;
             }
         };
-    }, [botAutoplayEnabled, currentActor, streetReveal.active, tableLocked, gameState.handNumber, gameState.street]);
+    }, [botAutoplayEnabled, currentActor, renderCommunityReveal.active, tableLocked, gameState.handNumber, gameState.street]);
 
     const restartablePlayers = gameState.players.filter(
         (player) => player.status !== "out" && player.stack > 0
@@ -1179,7 +1274,7 @@ export default function App() {
     const emptyActionMessage =
         tableLocked && latestStartHandRecord !== null
             ? "Posting blinds..."
-            : streetReveal.active
+            : renderCommunityReveal.active
                 ? "Dealing the next street..."
                 : gameState.street === "hand_complete"
                     ? canStartNextHand
@@ -1188,16 +1283,6 @@ export default function App() {
                             ? "Hand complete. Rebuy the hero to continue."
                             : "Hand complete. Not enough players remain to start a new hand."
                     : "No legal actions available right now.";
-    const pendingStreetReveal =
-        !streetReveal.active &&
-        lastStreetRef.current !== gameState.street &&
-        gameState.street !== "showdown" &&
-        gameState.street !== "hand_complete";
-    const communityRevealFromIndex = streetReveal.active
-        ? streetReveal.fromIndex
-        : pendingStreetReveal
-            ? lastBoardLengthRef.current
-            : gameState.board.length;
 
     function handleAction(action: PlayerAction) {
         if (tableLocked) {
@@ -1283,9 +1368,10 @@ export default function App() {
         setTableActionLabels(new Map());
         setBlindActionLabels(new Map());
         setTableLocked(true);
-        setStreetReveal({
+        setCommunityReveal({
             active: false,
-            fromIndex: 0,
+            visibleCount: 0,
+            faceUpCount: 0,
         });
         setGameState(createInitialGameState());
     }
@@ -1359,8 +1445,7 @@ export default function App() {
                             seatRoleBadgesByPlayerId={seatRoleBadgesByPlayerId}
                             handResultByPlayerId={handResultByPlayerId}
                             highlightedCardKeys={highlightedCardKeys}
-                            streetReveal={streetReveal}
-                            communityRevealFromIndex={communityRevealFromIndex}
+                            communityReveal={renderCommunityReveal}
                             currentActorSeatIndex={gameState.betting.currentActorSeatIndex}
                         />
                     </div>

@@ -744,6 +744,44 @@ textarea {
     appearance: none;
 }
 
+.raise-tray__adjustments {
+    display: flex;
+    flex: 0 1 168px;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.raise-tray__amount-slider {
+    width: clamp(92px, 11vw, 132px);
+    min-width: 0;
+    accent-color: #22c55e;
+}
+
+.raise-tray__step-button {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(6, 11, 24, 0.88);
+    color: #f8fafc;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+        transform 120ms ease,
+        border-color 120ms ease,
+        background 120ms ease;
+}
+
+.raise-tray__step-button:hover,
+.raise-tray__step-button:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(125, 211, 252, 0.42);
+    background: rgba(10, 20, 40, 0.94);
+}
+
 .raise-tray__actions {
     display: flex;
     flex: 0 0 auto;
@@ -1414,10 +1452,21 @@ textarea {
         order: 3;
     }
 
+    .raise-tray__adjustments {
+        flex: 1 1 100%;
+        width: 100%;
+        justify-content: center;
+        order: 4;
+    }
+
+    .raise-tray__amount-slider {
+        width: min(100%, 180px);
+    }
+
     .raise-tray__actions {
         width: 100%;
         justify-content: stretch;
-        order: 4;
+        order: 5;
     }
 
     .raise-tray__secondary-button,
