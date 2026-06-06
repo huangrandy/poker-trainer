@@ -476,6 +476,54 @@ function createPreflopAllInRunoutRevealState(): GameState {
   };
 }
 
+function createPreflopAllInRunoutStartState(): GameState {
+  const sample = createSampleGameState();
+
+  return {
+    ...sample,
+    handNumber: 27,
+    street: "preflop",
+    dealerSeatIndex: 0,
+    buttonSeatIndex: 0,
+    board: [],
+    players: sample.players.map((player) => {
+      if (player.id === "hero") {
+        return {
+          ...player,
+          stack: 1050,
+          holeCards: [makeCard("A", "clubs"), makeCard("K", "diamonds")],
+          currentStreetBet: 5,
+          totalCommittedThisHand: 5,
+          status: "active" as const,
+          hasActedThisStreet: false,
+        };
+      }
+
+      return {
+        ...player,
+        stack: 1400,
+        holeCards: [makeCard("9", "clubs"), makeCard("9", "spades")],
+        currentStreetBet: 10,
+        totalCommittedThisHand: 10,
+        status: "active" as const,
+        hasActedThisStreet: true,
+      };
+    }),
+    betting: {
+      currentBet: 10,
+      minRaiseTo: 20,
+      lastAggressorSeatIndex: 1,
+      currentActorSeatIndex: 0,
+    },
+    pot: {
+      mainPot: 15,
+      sidePots: [],
+    },
+    actionHistory: [],
+    lastHandResult: null,
+  };
+}
+
 describe("App", () => {
   it("keeps the center board height fixed as the board changes", () => {
     const emptyRender = render(<App />);
@@ -561,6 +609,8 @@ describe("App", () => {
     expect(potPill).toHaveTextContent("25");
     expect(winnerBanner).not.toBeNull();
     expect(loserBanner).not.toBeNull();
+    expect(winnerBanner).toHaveStyle({ opacity: "1" });
+    expect(loserBanner).toHaveStyle({ opacity: "1" });
     expect(container.querySelectorAll(".poker-table-scene__hand-tooltip")).toHaveLength(2);
     expect(container.querySelectorAll(".table-card--highlighted").length).toBeGreaterThan(0);
     expect(container.querySelectorAll(".table-card--muted").length).toBeGreaterThan(0);
@@ -761,19 +811,25 @@ describe("App", () => {
 
   it("replays an all-in runout one street at a time", async () => {
     const realApplyAction = engine.applyAction;
-    const setupState = createPreflopAllInRunoutRevealState();
-    const afterHeroAllIn = realApplyAction(setupState, {
-      type: "all_in",
-      playerId: "hero",
-    });
-    const finalState = realApplyAction(afterHeroAllIn, {
-      type: "call",
-      playerId: "bot-1",
-    });
+    const setupState = createPreflopAllInRunoutStartState();
+    const finalState = createPreflopAllInRunoutRevealState();
 
     vi.spyOn(engine, "startHand").mockImplementation(() => setupState);
+    vi.spyOn(engine, "getLegalActions").mockImplementation((state, playerId) => {
+      if (state.street === "preflop" && playerId === "hero") {
+        return [
+          {
+            type: "all_in",
+            minAmount: 1050,
+            maxAmount: 1050,
+          },
+        ];
+      }
+
+      return [];
+    });
     vi.spyOn(engine, "applyAction").mockImplementation((state, action) => {
-      if (state === setupState && action.type === "all_in" && action.playerId === "hero") {
+      if (state.street === "preflop" && action.type === "all_in" && action.playerId === "hero") {
         return finalState;
       }
 
@@ -786,21 +842,13 @@ describe("App", () => {
     expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(0);
     expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
 
-    const raiseTray = container.querySelector(".raise-tray");
-    expect(raiseTray).not.toBeNull();
-
     act(() => {
-      fireEvent.click(within(raiseTray as HTMLElement).getByRole("button", { name: /MAX/i }));
-    });
-
-    act(() => {
-      within(raiseTray as HTMLElement).getByRole("button", { name: "RAISE" }).dispatchEvent(
+      screen.getByRole("button", { name: /all in/i }).dispatchEvent(
         new MouseEvent("click", { bubbles: true })
       );
     });
 
-    expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(5);
-    expect(container.querySelectorAll(".poker-table-scene__community .table-card--face-down")).toHaveLength(2);
+    expect(container.querySelectorAll(".poker-table-scene__community .table-card")).toHaveLength(0);
     expect(container.querySelector(".poker-table-scene__banner--winner")).toBeNull();
 
     act(() => {

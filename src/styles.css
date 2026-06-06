@@ -275,8 +275,7 @@ textarea {
 }
 
 .table-card--muted {
-    opacity: 0.36;
-    filter: saturate(0.7) brightness(0.72);
+    filter: grayscale(0.26) saturate(0.62) brightness(0.64) contrast(0.92);
 }
 
 .table-card--black {

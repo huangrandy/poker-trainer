@@ -9,9 +9,10 @@ import type {
     PlayerState,
 } from "../features/game-engine/types";
 
-type StreetRevealState = {
+type CommunityRevealState = {
     active: boolean;
-    fromIndex: number;
+    visibleCount: number;
+    faceUpCount: number;
 };
 
 type PokerTableSceneProps = {
@@ -28,8 +29,7 @@ type PokerTableSceneProps = {
     }>>;
     handResultByPlayerId: Map<string, HandRevealPlayerResult>;
     highlightedCardKeys: Set<string>;
-    streetReveal: StreetRevealState;
-    communityRevealFromIndex: number;
+    communityReveal: CommunityRevealState;
     currentActorSeatIndex: number | null;
 };
 
@@ -232,8 +232,7 @@ export function PokerTableScene({
     seatRoleBadgesByPlayerId,
     handResultByPlayerId,
     highlightedCardKeys,
-    streetReveal,
-    communityRevealFromIndex,
+    communityReveal,
     currentActorSeatIndex,
 }: PokerTableSceneProps) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -330,7 +329,8 @@ export function PokerTableScene({
                     >
                         {Array.from({ length: boardSlots }).map((_, index) => {
                             const card = board[index];
-                            const isFaceDown = index >= communityRevealFromIndex;
+                            const isVisible = index < communityReveal.visibleCount;
+                            const isFaceDown = isVisible && index >= communityReveal.faceUpCount;
                             const isHighlighted =
                                 card && showHandRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false;
                             const isMuted = Boolean(
@@ -341,7 +341,22 @@ export function PokerTableScene({
                                 !isHighlighted
                             );
 
-                            return card ? (
+                            if (!isVisible || !card) {
+                                return (
+                                    <div
+                                        key={`community-empty-${index}`}
+                                        style={{
+                                            ...styles.communityCard,
+                                            width: DESIGN.cardWidth * scale,
+                                            height: DESIGN.cardHeight * scale,
+                                            borderRadius: `${cardRadius}px`,
+                                            opacity: 0,
+                                        }}
+                                    />
+                                );
+                            }
+
+                            return (
                                 <TableCard
                                     key={`${card.rank}-${card.suit}-${index}`}
                                     rank={card.rank}
@@ -355,16 +370,6 @@ export function PokerTableScene({
                                     }}
                                     cardRadius={cardRadius}
                                     scale={scale}
-                                />
-                            ) : (
-                                <div
-                                    key={`community-empty-${index}`}
-                                    style={{
-                                        ...styles.communityCard,
-                                        width: DESIGN.cardWidth * scale,
-                                        height: DESIGN.cardHeight * scale,
-                                        borderRadius: `${cardRadius}px`,
-                                    }}
                                 />
                             );
                         })}
@@ -424,6 +429,7 @@ export function PokerTableScene({
                     );
                     const actionLabel = player ? visibleActionByPlayerId.get(player.id) ?? null : null;
                     const seatRoleBadges = player ? seatRoleBadgesByPlayerId.get(player.id) ?? [] : [];
+                    const isLostAtShowdown = Boolean(showRevealResult && revealResult && !revealResult.isWinner);
                     const seatOutcomeClass = showRevealResult
                         ? revealResult?.isWinner
                             ? "poker-table-scene__banner--winner"
@@ -540,14 +546,10 @@ export function PokerTableScene({
                                             : styles.seat.background
                                         : "linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.88))",
                                     borderColor: player ? styles.seat.border : EMPTY_SEAT_BANNER_BORDER,
-                                    opacity: player
-                                        ? showRevealResult && revealResult && !revealResult.isWinner
-                                            ? 0.76
-                                            : 1
-                                        : 0.55,
+                                    opacity: player ? 1 : 0.55,
                                     filter: player
-                                        ? showRevealResult && revealResult && !revealResult.isWinner
-                                            ? "grayscale(0.42) brightness(0.78)"
+                                        ? isLostAtShowdown
+                                            ? "grayscale(0.52) brightness(0.45) saturate(0.8) contrast(0.95)"
                                             : "none"
                                         : "grayscale(0.35) brightness(0.82)",
                                     boxShadow: player
