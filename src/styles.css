@@ -260,7 +260,7 @@ textarea {
     background:
         radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.14) 0 8%, transparent 9%),
         radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.16) 0 9%, transparent 10%),
-        linear-gradient(135deg, #d72626 0%, #ff4d4d 100%);
+        linear-gradient(135deg, #6f1121 0%, #b11b36 54%, #d64b5a 100%);
     background-size: 18px 18px, 18px 18px, auto;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
