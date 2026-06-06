@@ -75,9 +75,9 @@ function getNeonPalette(suit: string) {
         case "clubs":
             return {
                 tone: "neon-green",
-                textColor: "#8cbd0b",
-                glowColor: "rgba(140, 189, 11, 0.92)",
-                softGlowColor: "rgba(140, 189, 11, 0.44)",
+                textColor: "#81b009",
+                glowColor: "rgba(129, 176, 9, 0.92)",
+                softGlowColor: "rgba(129, 176, 9, 0.44)",
             };
         default:
             return {
