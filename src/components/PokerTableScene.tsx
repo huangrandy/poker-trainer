@@ -70,7 +70,7 @@ const HOLE_CARD_FAN = [
     { rotate: -7, translateY: 0 },
     { rotate: 7, translateY: 0 },
 ] as const;
-const HOLE_CARD_OVERLAP = 14;
+const HOLE_CARD_OVERLAP = 20;
 
 const SEATS: SeatSlot[] = [
     {
