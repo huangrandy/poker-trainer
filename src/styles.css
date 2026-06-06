@@ -639,6 +639,7 @@ textarea {
     justify-content: center;
     gap: 14px;
     flex-wrap: wrap;
+    min-height: 58px;
 }
 
 .table-actions__row {
