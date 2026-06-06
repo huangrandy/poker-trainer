@@ -7,7 +7,6 @@ import {
     useSpring,
     useTransform,
 } from "framer-motion";
-import { useState } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 
 export type TableCardProps = {
@@ -46,32 +45,48 @@ function getSuitSymbol(suit: string) {
     return suitSymbols[suit] ?? suit;
 }
 
-function getSuitTone(suit: string) {
-    if (suit === "diamonds" || suit === "hearts") {
-        return "red";
-    }
-
-    return "black";
-}
-
 function formatCardLabel(rank: string, suit: string) {
     return `${rank}${getSuitSymbol(suit)}`;
 }
 
 function getNeonPalette(suit: string) {
-    const isRed = suit === "diamonds" || suit === "hearts";
-
-    return isRed
-        ? {
-              textColor: "#ef476f",
-              glowColor: "rgba(255, 84, 158, 0.9)",
-              softGlowColor: "rgba(255, 84, 158, 0.5)",
-          }
-        : {
-              textColor: "#4a3f7a",
-              glowColor: "rgba(184, 151, 255, 0.95)",
-              softGlowColor: "rgba(184, 151, 255, 0.45)",
-          };
+    switch (suit) {
+        case "hearts":
+            return {
+                tone: "pink",
+                textColor: "#ff4d8d",
+                glowColor: "rgba(255, 93, 155, 0.4)",
+                softGlowColor: "rgba(255, 93, 155, 0.48)",
+            };
+        case "diamonds":
+            return {
+                tone: "purple",
+                textColor: "#4a3f7a",
+                glowColor: "rgba(184, 140, 255, 0.95)",
+                softGlowColor: "rgba(184, 140, 255, 0.45)",
+            };
+        case "spades":
+            return {
+                tone: "teal",
+                textColor: "#31d0c6",
+                glowColor: "rgba(49, 208, 198, 0.6)",
+                softGlowColor: "rgba(49, 208, 198, 0.46)",
+            };
+        case "clubs":
+            return {
+                tone: "neon-green",
+                textColor: "#9bcf0e",
+                glowColor: "rgba(155, 207, 14, 0.92)",
+                softGlowColor: "rgba(155, 207, 14, 0.44)",
+            };
+        default:
+            return {
+                tone: "purple",
+                textColor: "#b57cff",
+                glowColor: "rgba(181, 124, 255, 0.95)",
+                softGlowColor: "rgba(181, 124, 255, 0.45)",
+            };
+    }
 }
 
 export function TableCard({
@@ -85,11 +100,8 @@ export function TableCard({
     isMuted = false,
 }: TableCardProps) {
     const prefersReducedMotion = useReducedMotion();
-    const [isHovered, setIsHovered] = useState(false);
     const flickControls = useAnimationControls();
     const neon = getNeonPalette(suit);
-    const mouseX = useMotionValue(0);
-    const mouseY = useMotionValue(0);
     const xPercent = useMotionValue(0);
     const yPercent = useMotionValue(0);
     const hoverScale = useSpring(1, { stiffness: 260, damping: 24 });
@@ -105,8 +117,6 @@ export function TableCard({
         [-0.5, 0.5],
         [`-${hoverTilt}deg`, `${hoverTilt}deg`]
     );
-    const sheenX = useTransform(mouseX, (value) => value - 180);
-    const sheenY = useTransform(mouseY, (value) => value - 180);
 
     const updatePointer = (event: PointerEvent<HTMLSpanElement>) => {
         if (prefersReducedMotion) {
@@ -119,15 +129,12 @@ export function TableCard({
 
         xPercent.set(currentX / width - 0.5);
         yPercent.set(currentY / height - 0.5);
-        mouseX.set(currentX);
-        mouseY.set(currentY);
     };
 
     const resetPointer = () => {
         xPercent.set(0);
         yPercent.set(0);
         hoverScale.set(1);
-        setIsHovered(false);
     };
 
     const triggerFlick = async (event: MouseEvent<HTMLSpanElement>) => {
@@ -181,7 +188,7 @@ export function TableCard({
             aria-label={formatCardLabel(rank, suit)}
             className={[
                 "table-card",
-                `table-card--${getSuitTone(suit)}`,
+                `table-card--${neon.tone}`,
                 isFaceDown ? "table-card--face-down" : "",
                 isHighlighted ? "table-card--highlighted" : "",
                 isMuted ? "table-card--muted" : "",
@@ -189,7 +196,6 @@ export function TableCard({
                 .filter(Boolean)
                 .join(" ")}
             onPointerEnter={(event) => {
-                setIsHovered(true);
                 updatePointer(event);
 
                 if (!prefersReducedMotion) {
@@ -208,7 +214,7 @@ export function TableCard({
                     rotateX,
                     rotateY,
                     scale: hoverScale,
-            } as MotionStyle
+                } as MotionStyle
             }
         >
             <motion.div
@@ -223,29 +229,6 @@ export function TableCard({
             >
                 <span className="table-card__inner">
                     <span className="table-card__face table-card__face--front">
-                        <motion.span
-                            animate={{ opacity: isHovered && !prefersReducedMotion ? 0.25 : 0 }}
-                            transition={{ duration: 0.2 }}
-                            style={{
-                                position: "absolute",
-                                width: "360px",
-                                height: "360px",
-                                borderRadius: "9999px",
-                                pointerEvents: "none",
-                                left: sheenX,
-                                top: sheenY,
-                            }}
-                        >
-                            <span
-                                style={{
-                                    position: "absolute",
-                                    inset: 0,
-                                    borderRadius: "9999px",
-                                    background:
-                                        "radial-gradient(circle, rgba(255,255,255,0.9), rgba(255,255,255,0) 72%)",
-                                }}
-                            />
-                        </motion.span>
                         <span
                             className="table-card__rank"
                             style={{

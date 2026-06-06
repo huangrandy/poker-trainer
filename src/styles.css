@@ -278,12 +278,20 @@ textarea {
     filter: grayscale(0.26) saturate(0.62) brightness(0.64) contrast(0.92);
 }
 
-.table-card--black {
-    color: #0f172a;
+.table-card--pink {
+    color: #ff4d8d;
 }
 
-.table-card--red {
-    color: #b91c1c;
+.table-card--purple {
+    color: #b57cff;
+}
+
+.table-card--teal {
+    color: #31d0c6;
+}
+
+.table-card--neon-green {
+    color: #d7ff4a;
 }
 
 .table-card__rank,
