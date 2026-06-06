@@ -58,6 +58,22 @@ function formatCardLabel(rank: string, suit: string) {
     return `${rank}${getSuitSymbol(suit)}`;
 }
 
+function getNeonPalette(suit: string) {
+    const isRed = suit === "diamonds" || suit === "hearts";
+
+    return isRed
+        ? {
+              textColor: "#ef476f",
+              glowColor: "rgba(255, 84, 158, 0.9)",
+              softGlowColor: "rgba(255, 84, 158, 0.5)",
+          }
+        : {
+              textColor: "#4a3f7a",
+              glowColor: "rgba(184, 151, 255, 0.95)",
+              softGlowColor: "rgba(184, 151, 255, 0.45)",
+          };
+}
+
 export function TableCard({
     rank,
     suit,
@@ -71,6 +87,7 @@ export function TableCard({
     const prefersReducedMotion = useReducedMotion();
     const [isHovered, setIsHovered] = useState(false);
     const flickControls = useAnimationControls();
+    const neon = getNeonPalette(suit);
     const mouseX = useMotionValue(0);
     const mouseY = useMotionValue(0);
     const xPercent = useMotionValue(0);
@@ -229,10 +246,24 @@ export function TableCard({
                                 }}
                             />
                         </motion.span>
-                        <span className="table-card__rank" style={{ fontSize: `${2.1 * scale}rem` }}>
+                        <span
+                            className="table-card__rank"
+                            style={{
+                                fontSize: `${2.1 * scale}rem`,
+                                color: neon.textColor,
+                                textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${neon.softGlowColor}, 0 0 22px ${neon.glowColor}`,
+                            }}
+                        >
                             {rank}
                         </span>
-                        <span className="table-card__suit" style={{ fontSize: `${1.7 * scale}rem` }}>
+                        <span
+                            className="table-card__suit"
+                            style={{
+                                fontSize: `${1.7 * scale}rem`,
+                                color: neon.textColor,
+                                textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${neon.softGlowColor}, 0 0 22px ${neon.glowColor}`,
+                            }}
+                        >
                             {getSuitSymbol(suit)}
                         </span>
                     </span>
