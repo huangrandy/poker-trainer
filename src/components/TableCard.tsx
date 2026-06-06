@@ -68,9 +68,9 @@ function getNeonPalette(suit: string) {
         case "spades":
             return {
                 tone: "teal",
-                textColor: "#23c2b7",
-                glowColor: "rgba(35, 194, 183, 0.6)",
-                softGlowColor: "rgba(35, 194, 183, 0.46)",
+                textColor: "#15b3a7",
+                glowColor: "rgba(21, 179, 167, 0.6)",
+                softGlowColor: "rgba(21, 179, 167, 0.46)",
             };
         case "clubs":
             return {
