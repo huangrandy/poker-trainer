@@ -345,12 +345,12 @@ export function PokerTableScene({
                                 return (
                                     <div
                                         key={`community-empty-${index}`}
+                                        aria-hidden="true"
                                         style={{
                                             ...styles.communityCard,
                                             width: DESIGN.cardWidth * scale,
                                             height: DESIGN.cardHeight * scale,
                                             borderRadius: `${cardRadius}px`,
-                                            opacity: 0,
                                         }}
                                     />
                                 );
