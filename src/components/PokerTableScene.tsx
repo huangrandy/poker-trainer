@@ -65,6 +65,12 @@ const DESIGN = {
     communityCardGap: 20,
 } as const;
 
+const HOLE_CARD_FAN = [
+    { rotate: -7, translateY: 2 },
+    { rotate: 7, translateY: -2 },
+] as const;
+const HOLE_CARD_OVERLAP = 14;
+
 const SEATS: SeatSlot[] = [
     {
         id: "seat-1",
@@ -472,7 +478,7 @@ export function PokerTableScene({
                     );
                     const holeCardWidth = DESIGN.cardWidth;
                     const holeCardHeight = DESIGN.cardHeight;
-                    const cardsWidth = holeCardWidth * 2 + DESIGN.cardGap;
+                    const cardsWidth = holeCardWidth * 2 - HOLE_CARD_OVERLAP;
                     const cardsRect = {
                         left: bannerRect.left + (bannerRect.width - cardsWidth) / 2,
                         top: bannerRect.top - holeCardHeight + 28,
@@ -523,30 +529,42 @@ export function PokerTableScene({
                                         left: cardsRect.left * scale,
                                         top: cardsRect.top * scale,
                                         width: cardsRect.width * scale,
-                                        display: "flex",
-                                        gap: DESIGN.cardGap * scale,
+                                        height: cardsRect.height * scale,
                                         zIndex: 2,
                                     }}
                                 >
                                     {player.holeCards.map((card, index) => (
-                                        <TableCard
+                                        <span
                                             key={`${player.id}-${card.rank}-${card.suit}-${index}`}
-                                            rank={card.rank}
-                                            suit={card.suit}
-                                            isFaceDown={!showCardsFaceUp}
-                                            isHighlighted={showRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false}
-                                            isMuted={
-                                                showRevealResult
-                                                    ? !highlightedCardKeys.has(getCardKey(card))
-                                                    : shouldDimFoldedCards
-                                            }
                                             style={{
+                                                position: "absolute",
+                                                left: index * (holeCardWidth - HOLE_CARD_OVERLAP) * scale,
+                                                top: 0,
+                                                display: "block",
                                                 width: holeCardWidth * scale,
                                                 height: holeCardHeight * scale,
+                                                transform: `translateY(${HOLE_CARD_FAN[index]?.translateY ?? 0}px) rotate(${HOLE_CARD_FAN[index]?.rotate ?? 0}deg)`,
+                                                transformOrigin: "50% 92%",
                                             }}
-                                            cardRadius={cardRadius}
-                                            scale={scale}
-                                        />
+                                        >
+                                            <TableCard
+                                                rank={card.rank}
+                                                suit={card.suit}
+                                                isFaceDown={!showCardsFaceUp}
+                                                isHighlighted={showRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false}
+                                                isMuted={
+                                                    showRevealResult
+                                                        ? !highlightedCardKeys.has(getCardKey(card))
+                                                        : shouldDimFoldedCards
+                                                }
+                                                style={{
+                                                    width: "100%",
+                                                    height: "100%",
+                                                }}
+                                                cardRadius={cardRadius}
+                                                scale={scale}
+                                            />
+                                        </span>
                                     ))}
                                 </div>
                             ) : null}
