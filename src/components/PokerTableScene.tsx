@@ -629,7 +629,7 @@ export function PokerTableScene({
                                             fontSize: `${24 * scale}px`,
                                         }}
                                     >
-                                        {player ? `$${player.stack}` : "Empty seat"}
+                                        {player ? `$${player.stack}` : "Empty"}
                                     </div>
                                 </div>
                                 {showRevealResult && revealResult ? (
