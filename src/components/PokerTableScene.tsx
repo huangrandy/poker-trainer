@@ -20,6 +20,11 @@ type PokerTableSceneProps = {
     board: Card[];
     potLabel: string;
     potAmount: number;
+    handResultKind: "fold" | "showdown" | null;
+    onAddSeat: (seatIndex: number) => void;
+    onClearPendingSeatChange: (seatIndex: number) => void;
+    onRemoveSeat: (seatIndex: number) => void;
+    pendingSeatChanges: Partial<Record<number, "add" | "remove">>;
     showVillainHoleCards: boolean;
     showHandRevealResult: boolean;
     visibleActionByPlayerId: Map<string, string>;
@@ -71,6 +76,7 @@ const HOLE_CARD_FAN = [
     { rotate: 7, translateY: 0 },
 ] as const;
 const HOLE_CARD_OVERLAP = 20;
+const SEAT_IDS_BY_INDEX = ["seat-4", "seat-1", "seat-2", "seat-3", "seat-5", "seat-6"] as const;
 
 const SEATS: SeatSlot[] = [
     {
@@ -196,21 +202,33 @@ function getCardKey(card: Card) {
 }
 
 function buildSeatOccupants(players: PlayerState[]) {
-    const hero = players.find((player) => player.isHero) ?? players[0] ?? null;
-    const remainingPlayers = players.filter((player) => player.id !== hero?.id);
-    const seatOrder = ["seat-4", "seat-1", "seat-2", "seat-3", "seat-5", "seat-6"];
     const occupants = new Map<string, PlayerState | null>();
 
-    seatOrder.forEach((seatId, index) => {
-        if (index === 0) {
-            occupants.set(seatId, hero);
-            return;
+    for (const seatId of SEAT_IDS_BY_INDEX) {
+        occupants.set(seatId, null);
+    }
+
+    for (const player of players) {
+        const seatId = SEAT_IDS_BY_INDEX[player.seatIndex];
+
+        if (!seatId) {
+            continue;
         }
 
-        occupants.set(seatId, remainingPlayers[index - 1] ?? null);
-    });
+        occupants.set(seatId, player);
+    }
 
     return occupants;
+}
+
+function getSeatIndexBySeatId(seatId: string) {
+    const seatIndex = SEAT_IDS_BY_INDEX.indexOf(seatId as (typeof SEAT_IDS_BY_INDEX)[number]);
+
+    return seatIndex === -1 ? null : seatIndex;
+}
+
+function getSeatAddLabel(seatLabel: string) {
+    return `Add bot to ${seatLabel}`;
 }
 
 const EMPTY_SEAT_BANNER_BACKGROUND = "rgba(15, 23, 42, 0.82)";
@@ -226,6 +244,11 @@ export function PokerTableScene({
     board,
     potLabel,
     potAmount,
+    handResultKind,
+    onAddSeat,
+    onClearPendingSeatChange,
+    onRemoveSeat,
+    pendingSeatChanges,
     showVillainHoleCards,
     showHandRevealResult,
     visibleActionByPlayerId,
@@ -239,6 +262,7 @@ export function PokerTableScene({
     const potRef = useRef<HTMLDivElement>(null);
     const scale = useMeasuredScale(containerRef);
     const [measuredPotHeight, setMeasuredPotHeight] = useState(0);
+    const [hoveredQueuedSeatIndex, setHoveredQueuedSeatIndex] = useState<number | null>(null);
     const boardWidth = DESIGN.width * scale;
     const boardHeight = DESIGN.height * scale;
     const tableWidth = DESIGN.tableWidth * scale;
@@ -398,11 +422,15 @@ export function PokerTableScene({
 
                 {seatPlacements.map((seat) => {
                     const player = playerBySeatId.get(seat.id) ?? null;
+                    const seatIndex = getSeatIndexBySeatId(seat.id);
                     const isCurrentActor = player?.seatIndex === currentActorSeatIndex;
+                    const pendingSeatChange = seatIndex !== null ? pendingSeatChanges[seatIndex] ?? null : null;
                     const revealResult = player ? handResultByPlayerId.get(player.id) ?? null : null;
                     const showRevealResult = Boolean(showVillainHoleCards && revealResult && showHandRevealResult);
                     const showCardsFaceUp = player?.isHero || showVillainHoleCards;
-                    const shouldDimFoldedCards = Boolean(player && !showVillainHoleCards && player.status === "folded");
+                    const shouldDimFoldedCards = Boolean(
+                        player && player.status === "folded" && handResultKind !== "showdown"
+                    );
                     const localRects = seatLocalRects[seat.layout.kind];
                     const bannerRect = mirrorRect(
                         localRects.banner,
@@ -429,12 +457,24 @@ export function PokerTableScene({
                     );
                     const actionLabel = player ? visibleActionByPlayerId.get(player.id) ?? null : null;
                     const seatRoleBadges = player ? seatRoleBadgesByPlayerId.get(player.id) ?? [] : [];
-                    const isLostAtShowdown = Boolean(showRevealResult && revealResult && !revealResult.isWinner);
-                    const seatOutcomeClass = showRevealResult
-                        ? revealResult?.isWinner
-                            ? "poker-table-scene__banner--winner"
-                            : "poker-table-scene__banner--loser"
+                    const shouldShowFoldResult = Boolean(handResultKind === "fold" && revealResult);
+                    const shouldShowWinnerHalo = Boolean(
+                        revealResult?.isWinner && (showRevealResult || shouldShowFoldResult)
+                    );
+                    const seatOutcomeClass = revealResult
+                        ? showRevealResult || shouldShowFoldResult
+                            ? revealResult.isWinner
+                                ? "poker-table-scene__banner--winner"
+                                : "poker-table-scene__banner--loser"
+                            : ""
                         : "";
+                    const shouldDimBanner = revealResult
+                        ? showRevealResult
+                            ? !revealResult.isWinner
+                            : shouldShowFoldResult
+                                ? !revealResult.isWinner
+                                : false
+                        : false;
 
                     return (
                         <article
@@ -487,12 +527,10 @@ export function PokerTableScene({
                                                 rank={card.rank}
                                                 suit={card.suit}
                                                 isFaceDown={!showCardsFaceUp}
-                                                isHighlighted={showRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false}
-                                                isMuted={
-                                                    showRevealResult
-                                                        ? !highlightedCardKeys.has(getCardKey(card))
-                                                        : shouldDimFoldedCards
+                                                isHighlighted={
+                                                    showRevealResult ? highlightedCardKeys.has(getCardKey(card)) : false
                                                 }
+                                                isMuted={showRevealResult ? !highlightedCardKeys.has(getCardKey(card)) : shouldDimFoldedCards}
                                                 style={{
                                                     width: "100%",
                                                     height: "100%",
@@ -548,12 +586,12 @@ export function PokerTableScene({
                                     borderColor: player ? styles.seat.border : EMPTY_SEAT_BANNER_BORDER,
                                     opacity: player ? 1 : 0.55,
                                     filter: player
-                                        ? isLostAtShowdown
+                                        ? shouldDimBanner
                                             ? "grayscale(0.52) brightness(0.45) saturate(0.8) contrast(0.95)"
                                             : "none"
                                         : "grayscale(0.35) brightness(0.82)",
                                     boxShadow: player
-                                        ? showRevealResult && revealResult?.isWinner
+                                        ? shouldShowWinnerHalo
                                             ? "0 0 18px rgba(34, 197, 94, 0.34), 0 0 36px rgba(34, 197, 94, 0.18), 0 0 56px rgba(14, 165, 233, 0.22), 0 24px 48px rgba(34, 197, 94, 0.1)"
                                             : isCurrentActor
                                                 ? "0 0 22px rgba(250, 204, 21, 0.34), 0 0 44px rgba(250, 204, 21, 0.18), 0 0 66px rgba(14, 165, 233, 0.14)"
@@ -611,17 +649,6 @@ export function PokerTableScene({
                                         }}
                                     >
                                         <span>{player?.name ?? seat.label}</span>
-                                        {isCurrentActor ? (
-                                            <span
-                                                className="poker-table-scene__current-badge"
-                                                style={{
-                                                    ...styles.currentBadge,
-                                                    fontSize: `${15 * scale}px`,
-                                                }}
-                                            >
-                                                Current
-                                            </span>
-                                        ) : null}
                                     </div>
                                     <div
                                         style={{
@@ -632,6 +659,66 @@ export function PokerTableScene({
                                         {player ? `$${player.stack}` : "Empty"}
                                     </div>
                                 </div>
+                                {seatIndex !== null ? (
+                                    <button
+                                        className="poker-table-scene__seat-add-button"
+                                        type="button"
+                                        aria-label={
+                                            pendingSeatChange === "add"
+                                                ? `Unqueue bot from ${seat.label}`
+                                                : pendingSeatChange === "remove"
+                                                    ? `Unqueue removal from ${seat.label}`
+                                                    : player
+                                                        ? `Remove ${player.name} from ${seat.label}`
+                                                        : getSeatAddLabel(seat.label)
+                                        }
+                                        onClick={() => {
+                                            if (pendingSeatChange === "add" || pendingSeatChange === "remove") {
+                                                onClearPendingSeatChange(seatIndex);
+                                                return;
+                                            }
+
+                                            if (player) {
+                                                onRemoveSeat(seatIndex);
+                                                return;
+                                            }
+
+                                            onAddSeat(seatIndex);
+                                        }}
+                                        onMouseEnter={() => {
+                                            if (pendingSeatChange === "add" || pendingSeatChange === "remove") {
+                                                setHoveredQueuedSeatIndex(seatIndex);
+                                            }
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (hoveredQueuedSeatIndex === seatIndex) {
+                                                setHoveredQueuedSeatIndex(null);
+                                            }
+                                        }}
+                                        style={{
+                                            marginLeft: "auto",
+                                            marginRight: 0,
+                                            marginTop: 0,
+                                            marginBottom: 0,
+                                            alignSelf: "center",
+                                            fontSize: `${12 * scale}px`,
+                                            padding: `${7 * scale}px ${12 * scale}px`,
+                                            borderRadius: 9999,
+                                            opacity:
+                                                pendingSeatChange === "add" || pendingSeatChange === "remove"
+                                                    ? 0.88
+                                                    : 1,
+                                        }}
+                                    >
+                                        {pendingSeatChange === "add" || pendingSeatChange === "remove"
+                                            ? hoveredQueuedSeatIndex === seatIndex
+                                                ? "Unqueue"
+                                                : "Queued"
+                                            : player
+                                                ? "Remove"
+                                                : "Add"}
+                                    </button>
+                                ) : null}
                                 {showRevealResult && revealResult ? (
                                     <div
                                         className="poker-table-scene__hand-tooltip"
@@ -777,19 +864,5 @@ const styles = {
     },
     seatStack: {
         color: "rgba(255,255,255,0.8)",
-    },
-    currentBadge: {
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "4px 10px",
-        borderRadius: "9999px",
-        background: "rgba(250, 204, 21, 0.14)",
-        border: "1px solid rgba(250, 204, 21, 0.3)",
-        color: "rgba(253, 224, 71, 0.95)",
-        letterSpacing: "0.08em",
-        textTransform: "uppercase" as const,
-        whiteSpace: "nowrap",
-        lineHeight: 1,
     },
 } satisfies Record<string, CSSProperties>;

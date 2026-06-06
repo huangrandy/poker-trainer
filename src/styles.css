@@ -409,8 +409,30 @@ textarea {
     box-shadow: none;
 }
 
-.poker-table-scene__current-badge {
+.poker-table-scene__seat-add-button {
     flex: 0 0 auto;
+    border: 1px solid rgba(125, 211, 252, 0.28);
+    background: rgba(8, 47, 73, 0.84);
+    color: #dbeafe;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.24);
+    transition:
+        transform 120ms ease,
+        border-color 120ms ease,
+        background 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.poker-table-scene__seat-add-button:hover,
+.poker-table-scene__seat-add-button:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(125, 211, 252, 0.5);
+    background: rgba(8, 66, 99, 0.92);
+    box-shadow: 0 12px 28px rgba(2, 6, 23, 0.3);
+    outline: none;
 }
 
 .poker-table-scene__seat-role-badges {
@@ -868,6 +890,13 @@ textarea {
     display: grid;
     gap: 12px;
     min-height: 0;
+    align-content: start;
+}
+
+.coach-panel__messages-spacer {
+    height: 100%;
+    min-height: 100%;
+    pointer-events: none;
 }
 
 .coach-panel__composer {
@@ -876,9 +905,45 @@ textarea {
     min-width: 0;
 }
 
+.coach-panel__presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.coach-panel__preset-button {
+    border: 1px solid rgba(125, 211, 252, 0.22);
+    background: rgba(7, 17, 31, 0.74);
+    color: #e2e8f0;
+    border-radius: 999px;
+    padding: 0.34rem 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.coach-panel__preset-button:hover {
+    border-color: rgba(125, 211, 252, 0.36);
+    background: rgba(15, 23, 42, 0.88);
+}
+
+.coach-panel__preset-button:focus-visible {
+    outline: 2px solid rgba(56, 189, 248, 0.65);
+    outline-offset: 2px;
+}
+
+.coach-panel__prompt-row {
+    display: flex;
+    gap: 12px;
+    align-items: end;
+    min-width: 0;
+}
+
 .coach-panel__prompt {
     display: grid;
     gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .coach-panel__prompt span {
@@ -889,7 +954,8 @@ textarea {
 .coach-panel__prompt textarea {
     width: 100%;
     resize: none;
-    min-height: 106px;
+    min-height: 84px;
+    max-height: 140px;
     border-radius: 18px;
     padding: 14px 16px;
     border: 1px solid rgba(148, 163, 184, 0.16);
@@ -898,17 +964,13 @@ textarea {
     outline: none;
 }
 
+.coach-panel__prompt-row .coach-panel__icon-button--primary {
+    flex: 0 0 auto;
+}
+
 .coach-panel__prompt textarea:focus-visible {
     border-color: rgba(125, 211, 252, 0.45);
     box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
-}
-
-.coach-panel__actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-    align-items: center;
 }
 
 .coach-panel__icon-button {
@@ -1515,8 +1577,7 @@ textarea {
     }
 
     .coach-panel__composer {
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: end;
+        gap: 8px;
     }
 
     .coach-panel__prompt {
@@ -1524,7 +1585,11 @@ textarea {
     }
 
     .coach-panel__prompt textarea {
-        min-height: 112px;
+        min-height: 80px;
+    }
+
+    .coach-panel__prompt-row {
+        align-items: end;
     }
 
     .table-actions__bar {

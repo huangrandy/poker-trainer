@@ -3,7 +3,7 @@ import { CoachPanel } from "./components/CoachPanel";
 import { PokerTableScene } from "./components/PokerTableScene";
 import { DebugPanel } from "./components/DebugPanel";
 import { TableCard } from "./components/TableCard";
-import { advanceBotTurns, type BotPersonaId } from "./features/bots";
+import { advanceBotTurns, DEFAULT_BOT_PERSONA_ID, type BotPersonaId } from "./features/bots";
 import {
     applyAction,
     getLegalActions,
@@ -19,10 +19,74 @@ import type {
     LegalAction,
     PlayerAction,
     PlayerState,
+    SeatIndex,
 } from "./features/game-engine/types";
 
 function getCardKey(card: Card): string {
     return `${card.rank}:${card.suit}`;
+}
+
+function createDefaultBotPlayer(seatIndex: SeatIndex, startingStack: number): PlayerState {
+    return {
+        id: `bot-${seatIndex}`,
+        name: `Bot ${seatIndex}`,
+        seatIndex,
+        isHero: false,
+        isBot: true,
+        botPersonaId: DEFAULT_BOT_PERSONA_ID,
+        stack: startingStack,
+        holeCards: [],
+        currentStreetBet: 0,
+        totalCommittedThisHand: 0,
+        status: "waiting",
+        hasActedThisStreet: false,
+    };
+}
+
+type PendingSeatChange = "add" | "remove";
+
+function applyPendingSeatChanges(
+    state: GameState,
+    pendingSeatChanges: Partial<Record<SeatIndex, PendingSeatChange>>
+): GameState {
+    const seatChanges = Object.entries(pendingSeatChanges) as Array<[string, PendingSeatChange]>;
+
+    if (seatChanges.length === 0) {
+        return state;
+    }
+
+    const removals = new Set<SeatIndex>();
+    const additions = new Set<SeatIndex>();
+
+    for (const [seatIndexText, change] of seatChanges) {
+        const seatIndex = Number(seatIndexText) as SeatIndex;
+
+        if (change === "remove") {
+            removals.add(seatIndex);
+        } else {
+            additions.add(seatIndex);
+        }
+    }
+
+    const removedPlayers = state.players.filter((player) => !removals.has(player.seatIndex));
+    const players = [...removedPlayers];
+
+    for (const seatIndex of additions) {
+        if (
+            seatIndex < 0 ||
+            seatIndex >= state.config.maxPlayers ||
+            players.some((player) => player.seatIndex === seatIndex)
+        ) {
+            continue;
+        }
+
+        players.push(createDefaultBotPlayer(seatIndex, state.config.startingStack));
+    }
+
+    return {
+        ...state,
+        players: players.sort((left, right) => left.seatIndex - right.seatIndex),
+    };
 }
 
 type SeatActionPlacement = "top" | "bottom" | "left" | "right";
@@ -71,12 +135,19 @@ const BOT_ACTION_DELAY_MS = 500;
 const STREET_REVEAL_DELAY_MS = 500;
 const GAME_STATE_STORAGE_KEY = "poker-trainer:game-state";
 const GAME_STATE_STORAGE_VERSION = 1;
+const PENDING_SEAT_CHANGES_STORAGE_KEY = "poker-trainer:pending-seat-changes";
+const PENDING_SEAT_CHANGES_STORAGE_VERSION = 1;
 const DEBUG_SETTINGS_STORAGE_KEY = "poker-trainer:debug-settings";
 const DEBUG_SETTINGS_STORAGE_VERSION = 1;
 
 type PersistedGameState = {
     version: number;
     gameState: GameState;
+};
+
+type PersistedPendingSeatChanges = {
+    version: number;
+    pendingSeatChanges: Partial<Record<SeatIndex, PendingSeatChange>>;
 };
 
 type PersistedDebugSettings = {
@@ -569,6 +640,71 @@ function savePersistedGameState(gameState: GameState): void {
     window.localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(payload));
 }
 
+function isPersistedPendingSeatChanges(value: unknown): value is PersistedPendingSeatChanges {
+    if (!isPlainObject(value) || value.version !== PENDING_SEAT_CHANGES_STORAGE_VERSION) {
+        return false;
+    }
+
+    if (!isPlainObject(value.pendingSeatChanges)) {
+        return false;
+    }
+
+    return Object.entries(value.pendingSeatChanges).every(([seatIndex, change]) => {
+        const seatNumber = Number(seatIndex);
+
+        return (
+            Number.isInteger(seatNumber) &&
+            seatNumber >= 0 &&
+            seatNumber < 6 &&
+            (change === "add" || change === "remove")
+        );
+    });
+}
+
+function loadPersistedPendingSeatChanges(): Partial<Record<SeatIndex, PendingSeatChange>> {
+    if (typeof window === "undefined") {
+        return {};
+    }
+
+    const serializedState = window.localStorage.getItem(PENDING_SEAT_CHANGES_STORAGE_KEY);
+
+    if (!serializedState) {
+        return {};
+    }
+
+    try {
+        const parsedState: unknown = JSON.parse(serializedState);
+
+        if (!isPersistedPendingSeatChanges(parsedState)) {
+            return {};
+        }
+
+        return parsedState.pendingSeatChanges;
+    } catch {
+        return {};
+    }
+}
+
+function savePersistedPendingSeatChanges(
+    pendingSeatChanges: Partial<Record<SeatIndex, PendingSeatChange>>
+): void {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    if (Object.keys(pendingSeatChanges).length === 0) {
+        window.localStorage.removeItem(PENDING_SEAT_CHANGES_STORAGE_KEY);
+        return;
+    }
+
+    const payload: PersistedPendingSeatChanges = {
+        version: PENDING_SEAT_CHANGES_STORAGE_VERSION,
+        pendingSeatChanges,
+    };
+
+    window.localStorage.setItem(PENDING_SEAT_CHANGES_STORAGE_KEY, JSON.stringify(payload));
+}
+
 function isPersistedDebugSettings(value: unknown): value is PersistedDebugSettings {
     return (
         isPlainObject(value) &&
@@ -847,6 +983,7 @@ function AggressiveActionSlot({
 
 export default function App() {
     const persistedGameState = useMemo(() => loadPersistedGameState(), []);
+    const persistedPendingSeatChanges = useMemo(() => loadPersistedPendingSeatChanges(), []);
     const persistedDebugSettings = useMemo(() => loadPersistedDebugSettings(), []);
     const [gameState, setGameState] = useState<GameState>(() => persistedGameState ?? createInitialGameState());
     const [tableActionLabels, setTableActionLabels] = useState<Map<string, string>>(() =>
@@ -867,6 +1004,9 @@ export default function App() {
         () => persistedDebugSettings?.botAutoplayEnabled ?? true
     );
     const [tableLocked, setTableLocked] = useState(() => !persistedGameState);
+    const [pendingSeatChanges, setPendingSeatChanges] = useState<Partial<Record<SeatIndex, PendingSeatChange>>>(
+        () => (persistedGameState ? persistedPendingSeatChanges : {})
+    );
     const [communityReveal, setCommunityReveal] = useState<CommunityRevealState>(() => ({
         active: false,
         visibleCount: gameState.board.length,
@@ -881,6 +1021,10 @@ export default function App() {
     const lastHandledStartHandIdRef = useRef<string | null>(null);
     const lastStreetRef = useRef<GameState["street"]>(gameState.street);
     const lastBoardLengthRef = useRef(gameState.board.length);
+    const nextHandPlayers = useMemo(
+        () => applyPendingSeatChanges(gameState, pendingSeatChanges).players,
+        [gameState, pendingSeatChanges]
+    );
 
     const currentActor = useMemo(
         () => gameState.players.find((player) => player.seatIndex === gameState.betting.currentActorSeatIndex) ?? null,
@@ -1017,6 +1161,10 @@ export default function App() {
 
         savePersistedGameState(gameState);
     }, [gameState, persistedGameState, renderCommunityReveal.active, tableLocked]);
+
+    useEffect(() => {
+        savePersistedPendingSeatChanges(pendingSeatChanges);
+    }, [pendingSeatChanges]);
 
     useEffect(() => {
         savePersistedDebugSettings({
@@ -1262,15 +1410,15 @@ export default function App() {
         };
     }, [botAutoplayEnabled, currentActor, renderCommunityReveal.active, tableLocked, gameState.handNumber, gameState.street]);
 
-    const restartablePlayers = gameState.players.filter(
+    const restartablePlayers = nextHandPlayers.filter(
         (player) => player.status !== "out" && player.stack > 0
     );
     const canStartNextHand = gameState.street === "hand_complete" && restartablePlayers.length >= 2;
-    const heroPlayer = gameState.players.find((player) => player.isHero) ?? null;
+    const heroPlayer = nextHandPlayers.find((player) => player.isHero) ?? null;
     const canRebuyHero =
         gameState.street === "hand_complete" &&
         heroPlayer?.stack === 0 &&
-        gameState.players.some((player) => !player.isHero && player.stack > 0);
+        nextHandPlayers.some((player) => !player.isHero && player.stack > 0);
     const emptyActionMessage =
         tableLocked && latestStartHandRecord !== null
             ? "Posting blinds..."
@@ -1353,6 +1501,32 @@ export default function App() {
         }));
     }
 
+    function handleAddBotSeat(seatIndex: SeatIndex) {
+        setPendingSeatChanges((previous) => ({
+            ...previous,
+            [seatIndex]: "add",
+        }));
+    }
+
+    function handleClearPendingSeatChange(seatIndex: SeatIndex) {
+        setPendingSeatChanges((previous) => {
+            if (!(seatIndex in previous)) {
+                return previous;
+            }
+
+            const next = { ...previous };
+            delete next[seatIndex];
+            return next;
+        });
+    }
+
+    function handleRemoveSeat(seatIndex: SeatIndex) {
+        setPendingSeatChanges((previous) => ({
+            ...previous,
+            [seatIndex]: "remove",
+        }));
+    }
+
     function handleRebuyPlayer(playerId: string) {
         setGameState((previous) => rebuyPlayer(previous, playerId));
     }
@@ -1368,6 +1542,7 @@ export default function App() {
         setTableActionLabels(new Map());
         setBlindActionLabels(new Map());
         setTableLocked(true);
+        setPendingSeatChanges({});
         setCommunityReveal({
             active: false,
             visibleCount: 0,
@@ -1389,7 +1564,8 @@ export default function App() {
             return;
         }
 
-        setGameState((previous) => startNextHand(previous));
+        setGameState((previous) => startNextHand(applyPendingSeatChanges(previous, pendingSeatChanges)));
+        setPendingSeatChanges({});
     }
 
     function handleRebuyAndStartNewHand() {
@@ -1404,8 +1580,9 @@ export default function App() {
                 return previous;
             }
 
-            return startNextHand(rebuyPlayer(previous, hero.id));
+            return startNextHand(applyPendingSeatChanges(rebuyPlayer(previous, hero.id), pendingSeatChanges));
         });
+        setPendingSeatChanges({});
     }
 
     const activePlayers = gameState.players.filter((player) => player.status !== "out");
@@ -1439,6 +1616,11 @@ export default function App() {
                             board={gameState.board}
                             potLabel={centerPotLabel}
                             potAmount={centerPotAmount}
+                            handResultKind={handResult?.kind ?? null}
+                            onAddSeat={handleAddBotSeat}
+                            onClearPendingSeatChange={handleClearPendingSeatChange}
+                            onRemoveSeat={handleRemoveSeat}
+                            pendingSeatChanges={pendingSeatChanges}
                             showVillainHoleCards={shouldRevealAllCards}
                             showHandRevealResult={showHandRevealResult}
                             visibleActionByPlayerId={sceneActionLabels}

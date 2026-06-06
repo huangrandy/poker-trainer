@@ -11,6 +11,9 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
   window.localStorage.clear();
+  const prototype: { offsetTop?: unknown; scrollTop?: unknown } = HTMLElement.prototype as any;
+  delete prototype.offsetTop;
+  delete prototype.scrollTop;
 });
 
 const GAME_STATE_STORAGE_KEY = "poker-trainer:game-state";
@@ -45,6 +48,45 @@ function createBustedHeroState(startHandImpl: typeof engine.startHand): GameStat
         stack: 990,
       };
     }),
+  };
+}
+
+function createQueuedSeatChangeState(startHandImpl: typeof engine.startHand): GameState {
+  const base = createBustedHeroState(startHandImpl);
+
+  return {
+    ...base,
+    players: [
+      ...base.players,
+      {
+        id: "bot-2",
+        name: "Bot 2",
+        seatIndex: 2,
+        isHero: false,
+        isBot: true,
+        botPersonaId: "tag",
+        stack: 1000,
+        holeCards: [],
+        currentStreetBet: 0,
+        totalCommittedThisHand: 0,
+        status: "waiting" as const,
+        hasActedThisStreet: false,
+      },
+      {
+        id: "bot-3",
+        name: "Bot 3",
+        seatIndex: 3,
+        isHero: false,
+        isBot: true,
+        botPersonaId: "tag",
+        stack: 1000,
+        holeCards: [],
+        currentStreetBet: 0,
+        totalCommittedThisHand: 0,
+        status: "waiting" as const,
+        hasActedThisStreet: false,
+      },
+    ],
   };
 }
 
@@ -792,6 +834,69 @@ describe("App", () => {
     });
   });
 
+  it("queues an added bot until the next hand starts and persists the queue", async () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createBustedHeroState(realStartHand));
+
+    const firstRender = render(<App />);
+    const { container } = firstRender;
+
+    expect(screen.getByRole("button", { name: "Rebuy and start new hand" })).toBeInTheDocument();
+    expect(container.querySelector('[data-player-id="bot-2"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add bot to Seat 2" }));
+
+    expect(container.querySelector('[data-player-id="bot-2"]')).toBeNull();
+    fireEvent.mouseLeave(screen.getByRole("button", { name: "Unqueue bot from Seat 2" }));
+    expect(screen.getByRole("button", { name: "Unqueue bot from Seat 2" })).toHaveTextContent("Queued");
+    expect(screen.getByRole("button", { name: "Start new hand" })).toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Unqueue bot from Seat 2" }));
+    expect(screen.getByRole("button", { name: "Unqueue bot from Seat 2" })).toHaveTextContent("Unqueue");
+
+    fireEvent.click(screen.getByRole("button", { name: "Unqueue bot from Seat 2" }));
+    expect(screen.getByRole("button", { name: "Add bot to Seat 2" })).toHaveTextContent("Add");
+    expect(container.querySelector('[data-player-id="bot-2"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add bot to Seat 2" }));
+    fireEvent.mouseLeave(screen.getByRole("button", { name: "Unqueue bot from Seat 2" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Unqueue bot from Seat 2" })).toHaveTextContent("Queued");
+    });
+
+    firstRender.unmount();
+    const secondRender = render(<App />);
+
+    expect(screen.getByRole("button", { name: "Unqueue bot from Seat 2" })).toHaveTextContent("Queued");
+
+    fireEvent.click(screen.getByRole("button", { name: "Start new hand" }));
+
+    await waitFor(() => {
+      expect(secondRender.container.querySelector('[data-player-id="bot-2"]')).not.toBeNull();
+    });
+  });
+
+  it("queues a removed player until the next hand starts", async () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createQueuedSeatChangeState(realStartHand));
+
+    const { container } = render(<App />);
+
+    expect(screen.getByRole("button", { name: "Start new hand" })).toBeInTheDocument();
+    expect(container.querySelector('[data-player-id="bot-2"]')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Bot 2 from Seat 2" }));
+
+    expect(container.querySelector('[data-player-id="bot-2"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Start new hand" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start new hand" }));
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-player-id="bot-2"]')).toBeNull();
+    });
+  });
+
   it("flips all villain hole cards face up on showdown", () => {
     vi.spyOn(engine, "startHand").mockImplementation(() => createShowdownRevealState());
 
@@ -818,6 +923,7 @@ describe("App", () => {
     expect(heroBadges).toHaveTextContent("D");
     expect(heroBadges).toHaveTextContent("SB");
     expect(botBadges).toHaveTextContent("BB");
+    expect(container.querySelector(".poker-table-scene__current-badge")).toBeNull();
     expect(screen.getByText("$5")).toBeInTheDocument();
     expect(screen.getByText("$10")).toBeInTheDocument();
   });
@@ -894,6 +1000,10 @@ describe("App", () => {
   it("sends the current hand snapshot to the coach server and renders the reply", async () => {
     const realStartHand = engine.startHand;
     vi.spyOn(engine, "startHand").mockImplementation(() => createPlayablePreflopState(realStartHand));
+    Object.defineProperty(HTMLElement.prototype, "offsetTop", {
+      configurable: true,
+      get: () => 240,
+    });
 
     const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
       new Response(
@@ -915,6 +1025,8 @@ describe("App", () => {
     );
 
     const { container } = render(<App />);
+    const messagesContainer = container.querySelector(".coach-panel__messages") as HTMLElement;
+    expect(messagesContainer).not.toBeNull();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Ask coach" }));
@@ -942,6 +1054,59 @@ describe("App", () => {
     expect(messageBody).toHaveTextContent("Use bigger sizing only if you need to pressure a capped range or your draw has strong backup equity.");
     expect(messageBody).toHaveTextContent("Versus a check, I’d usually start with $10.");
     expect(messageBody).toHaveTextContent("If you want, I can also give you a simple sizing rule for check-raising flush draws versus a bet, which is the more common decision with this type of hand.");
+    expect(screen.getByLabelText("Prompt")).toHaveValue("");
+    expect(messagesContainer.scrollTop).toBe(240);
+  });
+
+  it("submits preset prompts with Enter", async () => {
+    const realStartHand = engine.startHand;
+    vi.spyOn(engine, "startHand").mockImplementation(() => createPlayablePreflopState(realStartHand));
+    Object.defineProperty(HTMLElement.prototype, "offsetTop", {
+      configurable: true,
+      get: () => 180,
+    });
+
+    const fetchSpy = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          sessionId: "thread-abc123",
+          text: "Short answer.",
+          summary: "Value 3-bet.",
+          recommendedAction: "raise",
+          confidence: "high",
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        }
+      ) as Response
+    );
+
+    const { container } = render(<App />);
+    const messagesContainer = container.querySelector(".coach-panel__messages") as HTMLElement;
+    expect(messagesContainer).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "GTO" }));
+    expect(screen.getByLabelText("Prompt")).toHaveValue("Give me the most theory-aligned play and sizing.");
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter", code: "Enter" });
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    const [requestUrl, requestInit] = fetchSpy.mock.calls[0] ?? [];
+    expect(requestUrl).toBe("http://127.0.0.1:8787/api/coach");
+
+    const parsedBody = JSON.parse(String(requestInit?.body));
+    expect(parsedBody.prompt).toBe("Give me the most theory-aligned play and sizing.");
+    expect(screen.getByLabelText("Prompt")).toHaveValue("");
+    expect(messagesContainer.scrollTop).toBe(180);
   });
 
   it("opens a raise tray and confirms a sized raise", async () => {
